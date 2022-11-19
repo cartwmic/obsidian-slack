@@ -17,6 +17,9 @@ export default class ObsidianSlack extends Plugin {
 			callback: () => {
 				// insert rust function here to download slack messages and save them to attachments location. Make sure we don't redownload already existing messages
 				console.log("hello")
+				// pass token
+				// pass file list
+				// pass save location
 			}
 		})
 
@@ -26,6 +29,9 @@ export default class ObsidianSlack extends Plugin {
 			callback: () => {
 				// insert rust function here to download slack messages and save them to attachments location but only for current file. Make sure we don't redownload already existing messages
 				console.log("hello again")
+				// pass token
+				// pass file list
+				// pass save location
 			}
 		})
 
