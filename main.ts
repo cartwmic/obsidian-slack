@@ -13,7 +13,7 @@ export default class ObsidianSlack extends Plugin {
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
 			id: 'download-slack-messages-across-vault',
-			name: 'Download Slack Messages Across Vault',
+			name: 'Download slack messages across vault',
 			callback: () => {
 				// insert rust function here to download slack messages and save them to attachments location. Make sure we don't redownload already existing messages
 				console.log("hello")
@@ -22,7 +22,7 @@ export default class ObsidianSlack extends Plugin {
 
 		this.addCommand({
 			id: 'download-slack-messages-in-current-file',
-			name: 'Download Slack Messages In Current File',
+			name: 'Download slack messages in current file',
 			callback: () => {
 				// insert rust function here to download slack messages and save them to attachments location but only for current file. Make sure we don't redownload already existing messages
 				console.log("hello again")
