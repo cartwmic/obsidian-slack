@@ -23,10 +23,12 @@ data.json
 
 
 # Added by cargo
-
 /target
 **/*.rs.bk
 Cargo.lock
 bin/
 pkg/
 wasm-pack.log
+
+# Added by me
+pkg/
