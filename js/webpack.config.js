@@ -1,3 +1,4 @@
+const TerserPlugin = require("terser-webpack-plugin");
 const path = require("path");
 const webpack = require("webpack");
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
@@ -14,12 +15,37 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 module.exports = (env) => { 
-  const isProduciton = env === "production";
+  const isProduction = env === "production";
 
   return {
-    mode: "production",
+    resolve: {
+      extensions: ['.tsx', '.ts', '.js'],
+
+    },
+    mode: env,
     entry: {
       index: "./bootstrap.js"
+    },
+    module: {
+      rules: [
+        {
+          test: /\.tsx?$/,
+          loader: 'ts-loader',
+          options: {
+            transpileOnly: true,
+          },
+        },
+      ],
+    },
+    optimization: {
+      minimize: isProduction,
+      minimizer: [
+        new TerserPlugin({
+          extractComments: false,
+          minify: TerserPlugin.uglifyJsMinify,
+          terserOptions: {},
+        }),
+      ],
     },
     output: {
       path: dist,
@@ -28,18 +54,23 @@ module.exports = (env) => {
         type: "commonjs2"
       }
     },
-    watch: !isProduciton,
-    target: ["web", "es2018"],
+    watch: !isProduction,
+    target: "node",
     stats: {
       logging: 'info',
     },
-    devtool: isProduciton ? false : "inline-source-map",
+    devtool: isProduction ? false : "inline-source-map",
     plugins: [
       new WasmPackPlugin({
         crateDirectory: rustObsidianSlack,
+        forceMode: isProduction ? "production" : "development"
       }),
       new webpack.BannerPlugin(banner)
     ],
+    externals: {
+      electron: 'commonjs2 electron',
+      obsidian: 'commonjs2 obsidian',
+    },
     experiments: {
       asyncWebAssembly: true
     }
