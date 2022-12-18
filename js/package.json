@@ -3,10 +3,8 @@
   "version": "0.1.0",
   "description": "create an app to consume rust-generated wasm packages",
   "main": "index.ts",
-  "types": "bindings/Cargo.toml.d.ts",
   "scripts": {
-    "build": "rollup --config rollup.config.js",
-    "build2": "tsc -noEmit -skipLibCheck && webpack --mode production --env production --config webpack.config.js",
+    "build": "tsc -noEmit -skipLibCheck && rollup --config rollup.config.js",
     "version": "node version-bump.mjs && git add manifest.json versions.json"
   },
   "keywords": [
