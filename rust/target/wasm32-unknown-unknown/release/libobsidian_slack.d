@@ -1,0 +1,1 @@
+/Users/cartwmic/git/obsidian-test-vault/.obsidian/plugins/obsidian-slack/rust/target/wasm32-unknown-unknown/release/libobsidian_slack.rlib: /Users/cartwmic/git/obsidian-test-vault/.obsidian/plugins/obsidian-slack/rust/src/lib.rs /Users/cartwmic/git/obsidian-test-vault/.obsidian/plugins/obsidian-slack/rust/src/utils.rs

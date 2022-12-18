@@ -1,4 +1,4 @@
-import * as wasm from "obsidian-slack";
+import wasm from "../rust/Cargo.toml"
 import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
@@ -16,11 +16,12 @@ export default class ObisdianSlackPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		const exports = await wasm();
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
 			// Called when the user clicks the icon.
-            wasm.greet();
+            exports.greet();
 		});
 
         // This adds a settings tab so the user can configure various aspects of the plugin
