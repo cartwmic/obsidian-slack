@@ -14,6 +14,27 @@ extern {
 }
 
 #[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, obsidian-slack!");
+pub fn get_slack_message(url: String) {
+    alert(&SlackHttpClient::get_slack_message(url));
+}
+
+struct SlackToken {
+    token_string: String,
+    pub token: String
+}
+
+
+struct SlackHttpClientConfig {
+    api_base: String,
+    token: SlackToken,
+}
+
+struct SlackHttpClient {
+    pub slack_http_client_config: SlackHttpClientConfig
+}
+
+impl SlackHttpClient {
+    pub fn get_slack_message(url: String) -> String {
+        url
+    }
 }

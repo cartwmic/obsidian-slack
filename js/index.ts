@@ -1,5 +1,5 @@
 import wasm from "../rust/Cargo.toml"
-import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Modal, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -18,13 +18,14 @@ export default class ObisdianSlackPlugin extends Plugin {
 		await this.loadSettings();
 		const exports = await wasm();
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-            exports.greet();
+		this.addCommand({
+			id: 'get-slack-message',
+			name: 'Get Slack Message by URL',
+			callback: () => {
+				new GetSlackMessageModal(this.app, exports.get_slack_message).open();
+			}
 		});
 
-        // This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new ObsidianSlackPluginSettingsTab(this.app, this));
 	}
 
@@ -34,6 +35,47 @@ export default class ObisdianSlackPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+}
+
+class GetSlackMessageModal extends Modal {
+	url: string;
+	get_slack_message: (url: string) => void;
+
+	constructor(app: App, get_slack_message: (url: string) => void) {
+		super(app);
+		this.get_slack_message = get_slack_message;
+	}
+
+	onOpen() {
+		const { contentEl, titleEl } = this;
+		titleEl.setText('Get Slack Message by URL');
+		contentEl.setText('Paste URL below and submit')
+		const div = contentEl.createDiv();
+
+        const text = div
+            .createEl("textarea", {
+                text: this.contentEl.getText(),
+                // cls: ["obsidian-git-textarea"],
+                // attr: { rows: 10, cols: 30, wrap: "off" },
+            });
+
+        div.createEl("button",
+            {
+                // cls: ["mod-cta", "obsidian-git-center-button"],
+                text: "Save",
+            })
+            .addEventListener("click", async () => {
+                console.log(text.value);
+				this.url = text.value;
+                this.close();
+            });
+	}
+
+	onClose() {
+		const {contentEl} = this;
+		this.get_slack_message(this.url);
+		contentEl.empty();
 	}
 }
 
