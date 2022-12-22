@@ -1,17 +1,19 @@
 {
-  "name": "create-wasm-app",
+  "name": "obsidian-slack",
   "version": "0.1.0",
-  "description": "create an app to consume rust-generated wasm packages",
+  "description": "This is a plugin for downloading slack messages to your obsidian vault",
   "main": "index.ts",
   "scripts": {
     "build": "rollup --watch --config rollup.config.js",
-    "version": "node version-bump.mjs && git add manifest.json versions.json"
+    "version": "node version-bump.mjs"
   },
   "keywords": [
     "webassembly",
     "wasm",
     "rust",
-    "webpack"
+    "rollup",
+    "obsidian",
+    "slack"
   ],
   "devDependencies": {
     "@rollup/plugin-commonjs": "^15.1.0",
