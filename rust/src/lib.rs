@@ -14,8 +14,8 @@ extern {
 }
 
 #[wasm_bindgen]
-pub fn get_slack_message(url: String) {
-    alert(&SlackHttpClient::get_slack_message(url));
+pub fn get_slack_message(api_token: String, url: String) {
+    alert(&SlackHttpClient::get_slack_message(&api_token, &url));
 }
 
 struct SlackToken {
@@ -34,7 +34,7 @@ struct SlackHttpClient {
 }
 
 impl SlackHttpClient {
-    pub fn get_slack_message(url: String) -> String {
-        url
+    pub fn get_slack_message(api_token: &str, url: &str) -> String {
+        "SlackHttpClient:".to_owned() + api_token + ":" + url
     }
 }

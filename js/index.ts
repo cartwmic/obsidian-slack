@@ -1,5 +1,6 @@
 import wasm from "../rust/Cargo.toml"
 import { App, Modal, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { LocalStorageSettings } from "localStorageSettings";
 
 // Remember to rename these classes and interfaces!
 
@@ -13,8 +14,10 @@ const DEFAULT_SETTINGS: ObsidianSlackPluginSettings = {
 
 export default class ObisdianSlackPlugin extends Plugin {
 	settings: ObsidianSlackPluginSettings;
+    localStorage: LocalStorageSettings;
 
 	async onload() {
+        this.localStorage = new LocalStorageSettings(this);
 		await this.loadSettings();
 		const exports = await wasm();
 
@@ -22,7 +25,7 @@ export default class ObisdianSlackPlugin extends Plugin {
 			id: 'get-slack-message',
 			name: 'Get Slack Message by URL',
 			callback: () => {
-				new GetSlackMessageModal(this.app, exports.get_slack_message).open();
+				new GetSlackMessageModal(this.app, this, exports.get_slack_message).open();
 			}
 		});
 
@@ -40,11 +43,13 @@ export default class ObisdianSlackPlugin extends Plugin {
 
 class GetSlackMessageModal extends Modal {
 	url: string;
-	get_slack_message: (url: string) => void;
+	plugin: ObisdianSlackPlugin;
+	get_slack_message: (apiToken: string, url: string) => void;
 
-	constructor(app: App, get_slack_message: (url: string) => void) {
+	constructor(app: App, plugin: ObisdianSlackPlugin, get_slack_message: (apiToken: string, url: string) => void) {
 		super(app);
 		this.get_slack_message = get_slack_message;
+		this.plugin = plugin;
 	}
 
 	onOpen() {
@@ -74,7 +79,13 @@ class GetSlackMessageModal extends Modal {
 
 	onClose() {
 		const {contentEl} = this;
-		this.get_slack_message(this.url);
+		var apiToken = this.plugin.localStorage.getApiToken();
+		if (apiToken === null) {
+			alert("apiToken was null, aborting operation")
+		}
+		else {
+			this.get_slack_message(apiToken, this.url);
+		}
 		contentEl.empty();
 	}
 }
@@ -96,14 +107,12 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('API Token')
-			.setDesc('Token used to authenticate requests to the Slack API')
+			.setDesc('Token used to authenticate requests to the Slack API, you won\'t be able to see it again.')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.apiToken)
+				.setPlaceholder('Enter your token')
 				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.apiToken = value;
-					await this.plugin.saveSettings();
+					console.log('onChange:token: ' + value);
+					this.plugin.localStorage.setApiToken(value);
 				}));
 	}
 }
