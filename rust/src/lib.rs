@@ -1,6 +1,7 @@
 mod utils;
 
 use std::{str::FromStr, path};
+use tuple_conv::RepeatedTuple;
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
 
@@ -9,6 +10,8 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
+const THREAD_TS_KEY: &str = "thread_ts";
 
 #[wasm_bindgen]
 extern {
@@ -80,11 +83,28 @@ impl SlackUrl {
             .find(|segment| segment.starts_with('C') || segment.starts_with('D') || segment.starts_with('G'))
             .unwrap_or_else(|| panic!("{}|No channel id found in url|url={}", log_prefix, url))
             .to_string();
+
+        let ts = path_segments
+            .find(|segment| segment.starts_with('p'))
+            .unwrap_or_else(|| panic!("{}|No ts found in url|url={}", log_prefix, url))
+            .split_terminator('p')
+            .last()
+            .unwrap_or_else(|| panic!("{}|ts value is malformed in url|url={}", log_prefix, url))
+            .split_at(10)
+            .to_vec()
+            .join(".");
+
+
+        let thread_ts = url.query_pairs()
+            .find(|(key, _)| key == THREAD_TS_KEY)
+            .map(|(_, value)| value.to_string())
+            .unwrap_or_else(|| ts.clone());
+
         
         let res = SlackUrl { 
             channel_id,
-            ts: "".to_string(),
-            thread_ts: "".to_string(),
+            ts,
+            thread_ts,
             url
         };
 

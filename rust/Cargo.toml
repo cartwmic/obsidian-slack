@@ -16,6 +16,7 @@ reqwest = { version = "0.11", features = ["json"] }
 wasm-bindgen-futures = "0.4"
 log = "0.4"
 console_log = { version = "0.2", features = ["color"] }
+tuple-conv = "1.0"
 
 
 
