@@ -20,6 +20,7 @@ export default class ObisdianSlackPlugin extends Plugin {
         this.localStorage = new LocalStorageSettings(this);
 		await this.loadSettings();
 		const exports = await wasm();
+		exports.init_wasm(undefined);
 
 		this.addCommand({
 			id: 'get-slack-message',
@@ -59,16 +60,12 @@ class GetSlackMessageModal extends Modal {
 		const div = contentEl.createDiv();
 
         const text = div
-            .createEl("textarea", {
-                text: this.contentEl.getText(),
-                // cls: ["obsidian-git-textarea"],
-                // attr: { rows: 10, cols: 30, wrap: "off" },
+            .createEl("input", {
             });
 
         div.createEl("button",
             {
-                // cls: ["mod-cta", "obsidian-git-center-button"],
-                text: "Save",
+                text: "Submit",
             })
             .addEventListener("click", async () => {
                 console.log(text.value);
