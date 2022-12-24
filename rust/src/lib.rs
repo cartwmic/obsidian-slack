@@ -1,6 +1,6 @@
 mod utils;
 
-use std::{str::FromStr, path};
+use std::{str::{FromStr, Split}, path};
 use tuple_conv::RepeatedTuple;
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
@@ -57,10 +57,11 @@ struct SlackHttpClientConfig {
 }
 #[derive(Debug)]
 struct SlackUrl {
-    channel_id: String,
-    ts: String,
-    thread_ts: String,
-    url: reqwest::Url
+    pub channel_id: String,
+    pub ts: String,
+    pub thread_ts: String,
+    url: reqwest::Url,
+    path_segments: Vec<String>
 }
 
 impl SlackUrl {
@@ -74,17 +75,50 @@ impl SlackUrl {
             }
         };
 
-        let mut path_segments = match url.path_segments() {
+        let path_segments = SlackUrl::parse_path_segments(&url);
+        let channel_id = SlackUrl::parse_channel_id(&url, &path_segments);
+        let ts = SlackUrl::parse_ts(&url, &path_segments);
+        let thread_ts = SlackUrl::parse_thread_ts(&url).unwrap_or_else(|| ts.clone());
+        
+        let res = SlackUrl { 
+            channel_id,
+            ts,
+            thread_ts,
+            url,
+            path_segments
+        };
+
+        log::info!("{}|slack url={:#?}", log_prefix, res);
+        res
+    }
+
+    fn parse_path_segments(url: &reqwest::Url) -> Vec<String> {
+        let log_prefix = "rust|SlackUrl|parse_path_segments";
+
+        match url.path_segments() {
             Some(segments) => segments,
             None => panic!("{}|unable to parse path segments for slack url|url={}", log_prefix, url)
-        };
+        }
+        .collect::<Vec<&str>>().into_iter().map(String::from).collect::<Vec<String>>()
+    }
+
+    fn parse_channel_id(url: &reqwest::Url, path_segments: &Vec<String>) -> String {
+        let log_prefix = "rust|SlackUrl|parse_channel_id";
+
         // channel id can be prefixed with 'C', 'D', or 'G'. See https://api.slack.com/docs/conversations-api#shared_channels
-        let channel_id = path_segments
+        path_segments
+            .iter()
             .find(|segment| segment.starts_with('C') || segment.starts_with('D') || segment.starts_with('G'))
             .unwrap_or_else(|| panic!("{}|No channel id found in url|url={}", log_prefix, url))
-            .to_string();
+            .to_string()
 
-        let ts = path_segments
+    }
+
+    fn parse_ts(url: &reqwest::Url, path_segments: &Vec<String>) -> String {
+        let log_prefix = "rust|SlackUrl|parse_ts";
+
+        path_segments
+            .iter()
             .find(|segment| segment.starts_with('p'))
             .unwrap_or_else(|| panic!("{}|No ts found in url|url={}", log_prefix, url))
             .split_terminator('p')
@@ -92,25 +126,14 @@ impl SlackUrl {
             .unwrap_or_else(|| panic!("{}|ts value is malformed in url|url={}", log_prefix, url))
             .split_at(10)
             .to_vec()
-            .join(".");
+            .join(".")
 
+    }
 
-        let thread_ts = url.query_pairs()
+    fn parse_thread_ts(url: &reqwest::Url) -> Option<String> {
+        url.query_pairs()
             .find(|(key, _)| key == THREAD_TS_KEY)
             .map(|(_, value)| value.to_string())
-            .unwrap_or_else(|| ts.clone());
-
-        
-        let res = SlackUrl { 
-            channel_id,
-            ts,
-            thread_ts,
-            url
-        };
-
-        log::info!("{}|slack url={:#?}", log_prefix, res);
-
-        res
     }
 }
 
