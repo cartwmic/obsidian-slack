@@ -12,4 +12,12 @@ export class LocalStorageSettings {
     setApiToken(value: string): void {
         return app.saveLocalStorage(this.prefix + "apiToken", value);
     }
+
+    getCookie(): string | null {
+        return app.loadLocalStorage(this.prefix + "cookie");
+    }
+
+    setCookie(value: string): void {
+        return app.saveLocalStorage(this.prefix + "cookie", value);
+    }
 }

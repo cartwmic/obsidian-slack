@@ -17,7 +17,8 @@ wasm-bindgen-futures = "0.4"
 log = "0.4"
 console_log = { version = "0.2", features = ["color"] }
 tuple-conv = "1.0"
-
+strum = "0.24"
+strum_macros = "0.24"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by

@@ -6,18 +6,20 @@ import { LocalStorageSettings } from "localStorageSettings";
 
 interface ObsidianSlackPluginSettings {
 	apiToken: string;
+	cookie: string;
 }
 
 const DEFAULT_SETTINGS: ObsidianSlackPluginSettings = {
-	apiToken: 'default'
+	apiToken: 'default',
+	cookie: 'default'
 }
 
 export default class ObisdianSlackPlugin extends Plugin {
 	settings: ObsidianSlackPluginSettings;
-    localStorage: LocalStorageSettings;
+	localStorage: LocalStorageSettings;
 
 	async onload() {
-        this.localStorage = new LocalStorageSettings(this);
+		this.localStorage = new LocalStorageSettings(this);
 		await this.loadSettings();
 		const exports = await wasm();
 		exports.init_wasm(undefined);
@@ -45,9 +47,9 @@ export default class ObisdianSlackPlugin extends Plugin {
 class GetSlackMessageModal extends Modal {
 	url: string;
 	plugin: ObisdianSlackPlugin;
-	get_slack_message: (apiToken: string, url: string) => void;
+	get_slack_message: (apiToken: string, cookie: string, url: string) => void;
 
-	constructor(app: App, plugin: ObisdianSlackPlugin, get_slack_message: (apiToken: string, url: string) => void) {
+	constructor(app: App, plugin: ObisdianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string) => void) {
 		super(app);
 		this.get_slack_message = get_slack_message;
 		this.plugin = plugin;
@@ -59,29 +61,30 @@ class GetSlackMessageModal extends Modal {
 		contentEl.setText('Paste URL below and submit')
 		const div = contentEl.createDiv();
 
-        const text = div
-            .createEl("input", {
-            });
+		const text = div
+			.createEl("input", {
+			});
 
-        div.createEl("button",
-            {
-                text: "Submit",
-            })
-            .addEventListener("click", async () => {
-                console.log(text.value);
+		div.createEl("button",
+			{
+				text: "Submit",
+			})
+			.addEventListener("click", async () => {
+				console.log(text.value);
 				this.url = text.value;
-                this.close();
-            });
+				this.close();
+			});
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		var apiToken = this.plugin.localStorage.getApiToken();
-		if (apiToken === null) {
-			alert("apiToken was null, aborting operation")
+		var cookie = this.plugin.localStorage.getCookie();
+		if (apiToken === null || cookie === null) {
+			alert("apiToken or cookie was null, aborting operation")
 		}
 		else {
-			this.get_slack_message(apiToken, this.url);
+			this.get_slack_message(apiToken, cookie, this.url);
 		}
 		contentEl.empty();
 	}
@@ -96,11 +99,11 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for obsidian slack.'});
+		containerEl.createEl('h2', { text: 'Settings for obsidian slack.' });
 
 		new Setting(containerEl)
 			.setName('API Token')
@@ -110,6 +113,16 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					console.log('onChange:token: ' + value);
 					this.plugin.localStorage.setApiToken(value);
+				}));
+
+		new Setting(containerEl)
+			.setName('Cookie')
+			.setDesc('Cookie used to authenticate requests to the Slack API, you won\'t be able to see it again.')
+			.addText(text => text
+				.setPlaceholder('Enter your cookie')
+				.onChange(async (value) => {
+					console.log('onChange:cookie: ' + value);
+					this.plugin.localStorage.setCookie(value);
 				}));
 	}
 }
