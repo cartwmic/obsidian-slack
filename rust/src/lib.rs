@@ -2,6 +2,7 @@ mod utils;
 
 use reqwest::Response;
 use std::{
+    collections::HashMap,
     fmt::Error,
     future::Future,
     path,
@@ -243,14 +244,20 @@ impl SlackHttpClient {
         ));
 
         log::info!("{}|send request", &log_prefix);
-        client
+        let body = HashMap::from([("token", self.slack_http_client_config.token.as_str())]);
+        let request = client
             .post(request_url)
-            .header(
-                "Authorization",
-                "Bearer ".to_owned() + self.slack_http_client_config.token.as_str(),
-            )
+            .form(&body)
             .header("cookie", self.slack_http_client_config.cookie.as_str())
-            .send()
-            .await
+            .header("content-length", "")
+            .build()
+            .unwrap();
+        log::info!(
+            "{}|body={:#?}",
+            log_prefix,
+            std::str::from_utf8(request.body().expect("msg").as_bytes().expect("msg"))
+        );
+        log::info!("{}|request={:#?}", log_prefix, request);
+        client.execute(request).await
     }
 }
