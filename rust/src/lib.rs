@@ -1,20 +1,13 @@
 mod utils;
 
 use js_sys::Promise;
-use reqwest::Response;
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::Serializer;
-use std::{
-    collections::HashMap,
-    fmt::Error,
-    future::Future,
-    path,
-    str::{FromStr, Split},
-};
+use std::{collections::HashMap, path, str::FromStr};
 use tuple_conv::RepeatedTuple;
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -100,7 +93,7 @@ enum SlackApiQueryParams {
 }
 
 struct SlackHttpClientConfig {
-    api_base: reqwest::Url,
+    api_base: url::Url,
     token: String,
     cookie: String,
 }
@@ -109,7 +102,7 @@ struct SlackUrl {
     pub channel_id: String,
     pub ts: String,
     pub thread_ts: String,
-    url: reqwest::Url,
+    url: url::Url,
     path_segments: Vec<String>,
 }
 
@@ -117,15 +110,7 @@ impl SlackUrl {
     fn new(url_string: &str) -> Self {
         let log_prefix = "rust|SlackUrl|new";
 
-        let url = match reqwest::Url::parse(url_string) {
-            Ok(the_url) => the_url,
-            Err(err) => {
-                panic!(
-                    "{}|unable to parse the url string into a reqwest|url_string={}|err={}",
-                    log_prefix, url_string, err
-                )
-            }
-        };
+        let url = url::Url::from_str(url_string).unwrap();
 
         let path_segments = SlackUrl::parse_path_segments(&url);
         let channel_id = SlackUrl::parse_channel_id(&url, &path_segments);
@@ -144,53 +129,42 @@ impl SlackUrl {
         res
     }
 
-    fn parse_path_segments(url: &reqwest::Url) -> Vec<String> {
-        let log_prefix = "rust|SlackUrl|parse_path_segments";
-
-        match url.path_segments() {
-            Some(segments) => segments,
-            None => panic!(
-                "{}|unable to parse path segments for slack url|url={}",
-                log_prefix, url
-            ),
-        }
-        .collect::<Vec<&str>>()
-        .into_iter()
-        .map(String::from)
-        .collect::<Vec<String>>()
+    fn parse_path_segments(url: &url::Url) -> Vec<String> {
+        url.path_segments()
+            .unwrap()
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<String>>()
     }
 
-    fn parse_channel_id(url: &reqwest::Url, path_segments: &Vec<String>) -> String {
-        let log_prefix = "rust|SlackUrl|parse_channel_id";
-
+    fn parse_channel_id(url: &url::Url, path_segments: &Vec<String>) -> String {
         // channel id can be prefixed with 'C', 'D', or 'G'. See https://api.slack.com/docs/conversations-api#shared_channels
         path_segments
             .iter()
             .find(|segment| {
                 segment.starts_with('C') || segment.starts_with('D') || segment.starts_with('G')
             })
-            .unwrap_or_else(|| panic!("{}|No channel id found in url|url={}", log_prefix, url))
+            .unwrap()
             .to_string()
     }
 
-    fn parse_ts(url: &reqwest::Url, path_segments: &Vec<String>) -> String {
-        let log_prefix = "rust|SlackUrl|parse_ts";
-
+    fn parse_ts(url: &url::Url, path_segments: &Vec<String>) -> String {
         path_segments
             .iter()
             .find(|segment| segment.starts_with('p'))
-            .unwrap_or_else(|| panic!("{}|No ts found in url|url={}", log_prefix, url))
+            .unwrap()
             .split_terminator('p')
             .last()
-            .unwrap_or_else(|| panic!("{}|ts value is malformed in url|url={}", log_prefix, url))
+            .unwrap()
             .split_at(10)
             .to_vec()
             .join(".")
     }
 
-    fn parse_thread_ts(url: &reqwest::Url) -> Option<String> {
+    fn parse_thread_ts(url: &url::Url) -> Option<String> {
         url.query_pairs()
-            .find(|(key, _)| key == THREAD_TS_KEY)
+            .find(|(key, _)| *key == THREAD_TS_KEY)
             .map(|(_, value)| value.to_string())
     }
 }
@@ -208,12 +182,7 @@ impl SlackHttpClient {
 
         SlackHttpClient {
             slack_http_client_config: SlackHttpClientConfig {
-                api_base: reqwest::Url::parse(API_BASE).unwrap_or_else(|err| {
-                    panic!(
-                        "{}|Unable to parse base url for api|API_BASE={}|err={}",
-                        log_prefix, API_BASE, err
-                    )
-                }),
+                api_base: url::Url::from_str(API_BASE).unwrap(),
                 token: api_token.to_owned(),
                 cookie: cookie.to_owned(),
             },
@@ -228,25 +197,25 @@ impl SlackHttpClient {
         let slack_url = SlackUrl::new(url);
 
         log::info!("{}|get slack message", &log_prefix);
-        let mut request_url = self
-            .slack_http_client_config
-            .api_base
-            .join("conversations.replies")
-            .unwrap();
-        request_url.set_query(Some(
-            format!(
-                "{}={}&{}={}&{}={}&{}={}",
-                SlackApiQueryParams::channel,
+        let mut request_url = self.slack_http_client_config.api_base.clone();
+        request_url
+            .path_segments_mut()
+            .unwrap()
+            .push("conversations.replies");
+        request_url
+            .query_pairs_mut()
+            .append_pair(
+                SlackApiQueryParams::channel.to_string().as_str(),
                 slack_url.channel_id.as_str(),
-                SlackApiQueryParams::ts,
-                slack_url.ts,
-                SlackApiQueryParams::pretty,
-                "1",
-                SlackApiQueryParams::inclusive,
-                "true"
             )
-            .as_str(),
-        ));
+            .append_pair(
+                SlackApiQueryParams::ts.to_string().as_str(),
+                slack_url.ts.as_str(),
+            )
+            .append_pair(SlackApiQueryParams::pretty.to_string().as_str(), "1")
+            .append_pair(SlackApiQueryParams::inclusive.to_string().as_str(), "true");
+
+        log::info!("{}", request_url);
 
         let the_request = RequestUrlParam {
             url: request_url.to_string(),
@@ -264,6 +233,7 @@ impl SlackHttpClient {
             body: format!("token={}", self.slack_http_client_config.token),
         };
         let serializer = Serializer::json_compatible();
+        log::info!("{:#?}", the_request.serialize(&serializer).unwrap());
 
         let promise = request(the_request.serialize(&serializer).unwrap());
         wasm_bindgen_futures::JsFuture::from(promise).await
