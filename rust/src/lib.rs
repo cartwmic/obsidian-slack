@@ -1,5 +1,6 @@
 mod utils;
 
+use js_sys::Promise;
 use reqwest::Response;
 use std::{
     collections::HashMap,
@@ -27,6 +28,11 @@ extern "C" {
     fn alert(s: &str);
 }
 
+#[wasm_bindgen(module = "obsidian")]
+extern "C" {
+    fn request(request: js_sys::Object) -> Promise;
+}
+
 #[wasm_bindgen]
 pub fn init_wasm(log_level: Option<String>) {
     set_panic_hook();
@@ -50,18 +56,13 @@ pub fn init_wasm(log_level: Option<String>) {
 }
 
 #[wasm_bindgen]
-pub fn get_slack_message(api_token: String, cookie: String, url: String) {
+pub async fn get_slack_message(api_token: String, cookie: String, url: String) -> JsValue {
     let client = SlackHttpClient::new(&api_token, &cookie);
-    spawn_local(async move {
-        let result = match client.get_conversation_replies(&url).await {
-            Ok(resp) => match resp.text().await {
-                Ok(text) => text,
-                Err(err) => "".to_owned(),
-            },
-            Err(err) => "".to_owned(),
-        };
-        alert(result.as_str());
-    });
+    // spawn_local(async move {
+    match client.get_conversation_replies(&url).await {
+        Ok(resp) => resp,
+        Err(err) => err,
+    }
 }
 
 fn validate_slack_api_token(api_token: &str) {
@@ -214,50 +215,74 @@ impl SlackHttpClient {
         }
     }
 
-    pub async fn get_conversation_replies(&self, url: &str) -> Result<Response, reqwest::Error> {
-        let log_prefix = "rust|get_slack_message";
-        log::info!("{}|url={}", &log_prefix, url);
+    pub async fn get_conversation_replies(&self, url: &str) -> Result<JsValue, JsValue> {
+        // let log_prefix = "rust|get_slack_message";
+        // log::info!("{}|url={}", &log_prefix, url);
 
-        log::info!("{}|parse url", &log_prefix);
-        let slack_url = SlackUrl::new(url);
+        // log::info!("{}|parse url", &log_prefix);
+        // let slack_url = SlackUrl::new(url);
 
-        log::info!("{}|get slack message", &log_prefix);
-        let client = reqwest::Client::new();
-        let mut request_url = self
-            .slack_http_client_config
-            .api_base
-            .join("conversations.replies")
-            .unwrap_or_else(|err| panic!("{}|unable to parse request url", log_prefix));
-        request_url.set_query(Some(
-            format!(
-                "{}={}&{}={}&{}={}&{}={}",
-                SlackApiQueryParams::channel,
-                slack_url.channel_id.as_str(),
-                SlackApiQueryParams::ts,
-                slack_url.ts,
-                SlackApiQueryParams::pretty,
-                "1",
-                SlackApiQueryParams::inclusive,
-                "true"
-            )
-            .as_str(),
-        ));
+        // log::info!("{}|get slack message", &log_prefix);
+        // let client = reqwest::Client::new();
+        // let mut request_url = self
+        //     .slack_http_client_config
+        //     .api_base
+        //     .join("conversations.replies")
+        //     .unwrap_or_else(|err| panic!("{}|unable to parse request url", log_prefix));
+        // request_url.set_query(Some(
+        //     format!(
+        //         "{}={}&{}={}&{}={}&{}={}",
+        //         SlackApiQueryParams::channel,
+        //         slack_url.channel_id.as_str(),
+        //         SlackApiQueryParams::ts,
+        //         slack_url.ts,
+        //         SlackApiQueryParams::pretty,
+        //         "1",
+        //         SlackApiQueryParams::inclusive,
+        //         "true"
+        //     )
+        //     .as_str(),
+        // ));
 
-        log::info!("{}|send request", &log_prefix);
-        let body = HashMap::from([("token", self.slack_http_client_config.token.as_str())]);
-        let request = client
-            .post(request_url)
-            .form(&body)
-            .header("cookie", self.slack_http_client_config.cookie.as_str())
-            .header("content-length", "")
-            .build()
-            .unwrap();
-        log::info!(
-            "{}|body={:#?}",
-            log_prefix,
-            std::str::from_utf8(request.body().expect("msg").as_bytes().expect("msg"))
+        let the_request = js_sys::Object::new();
+        let headers = js_sys::Object::new();
+
+        js_sys::Reflect::set(
+            &headers,
+            &JsValue::from("content-type"),
+            &JsValue::from("application/x-www-form-urlencoded"),
         );
-        log::info!("{}|request={:#?}", log_prefix, request);
-        client.execute(request).await
+        js_sys::Reflect::set(
+            &headers,
+            &JsValue::from("cookie"),
+            &JsValue::from("d=xoxd-NImkt4e5%2FBZJ8cm8bPd9JWAZ5ATSvnUwE%2FHGRV4E%2FyCdFSbaclP0Xw6p0MwCij7dVH0sG9oLVrO8uVW9DOUP2AmGituX8NwJgd8iVSOnjWCqR%2F%2Fx0KraMm%2FYuBZCJWfVDKxA8df9Yz6OX5XB2qPXA0c9F1DvLbYDZP7btXloR8RdQoEIb5dBdQ%3D%3D;"),
+        );
+
+        js_sys::Reflect::set(&the_request, &JsValue::from("url"), &JsValue::from("https://axon.slack.com/api/conversations.replies?channel=C01ENB4KP26&ts=1671055784.980429&pretty=1&inclusive=true"));
+        js_sys::Reflect::set(
+            &the_request,
+            &JsValue::from("method"),
+            &JsValue::from("POST"),
+        );
+        js_sys::Reflect::set(&the_request, &JsValue::from("headers"), &headers);
+        js_sys::Reflect::set(&the_request, &JsValue::from("body"), &JsValue::from("token=xoxc-4684147883-3183999236788-4411640857313-b8215c23899763f5f3e048dedb3d8e2cdee8957a7f2eaafa7d81eccda9ca35d7"));
+
+        let promise = request(the_request);
+        wasm_bindgen_futures::JsFuture::from(promise).await
+
+        // let body = HashMap::from([("token", self.slack_http_client_config.token.as_str())]);
+        // let request = client
+        //     .post(request_url)
+        //     .form(&body)
+        //     .header("cookie", self.slack_http_client_config.cookie.as_str())
+        //     .header("content-length", "")
+        //     .build()
+        //     .unwrap();
+        // log::info!(
+        //     "{}|body={:#?}",
+        //     log_prefix,
+        //     std::str::from_utf8(request.body().expect("msg").as_bytes().expect("msg"))
+        // );
+        // client.execute(request).await
     }
 }

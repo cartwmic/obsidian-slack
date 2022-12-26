@@ -1,5 +1,5 @@
 import wasm from "../rust/Cargo.toml"
-import { App, Modal, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Modal, Plugin, PluginSettingTab, request, Setting } from 'obsidian';
 import { LocalStorageSettings } from "localStorageSettings";
 
 // Remember to rename these classes and interfaces!
@@ -47,9 +47,9 @@ export default class ObisdianSlackPlugin extends Plugin {
 class GetSlackMessageModal extends Modal {
 	url: string;
 	plugin: ObisdianSlackPlugin;
-	get_slack_message: (apiToken: string, cookie: string, url: string) => void;
+	get_slack_message: (apiToken: string, cookie: string, url: string) => any;
 
-	constructor(app: App, plugin: ObisdianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string) => void) {
+	constructor(app: App, plugin: ObisdianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string) => any) {
 		super(app);
 		this.get_slack_message = get_slack_message;
 		this.plugin = plugin;
@@ -76,7 +76,7 @@ class GetSlackMessageModal extends Modal {
 			});
 	}
 
-	onClose() {
+	async onClose() {
 		const { contentEl } = this;
 		var apiToken = this.plugin.localStorage.getApiToken();
 		var cookie = this.plugin.localStorage.getCookie();
@@ -84,9 +84,21 @@ class GetSlackMessageModal extends Modal {
 			alert("apiToken or cookie was null, aborting operation")
 		}
 		else {
-			this.get_slack_message(apiToken, cookie, this.url);
+			console.log(await this.get_slack_message(apiToken, cookie, this.url));
+			// 	console.log(await request(
+			// 		{
+			// 			"url": "https://axon.slack.com/api/conversations.replies?channel=C01ENB4KP26&ts=1671055784.980429&pretty=1&inclusive=true",
+			// 			"headers": {
+			// 				"content-type": "application/x-www-form-urlencoded",
+			// 				"cookie": "d=xoxd-NImkt4e5%2FBZJ8cm8bPd9JWAZ5ATSvnUwE%2FHGRV4E%2FyCdFSbaclP0Xw6p0MwCij7dVH0sG9oLVrO8uVW9DOUP2AmGituX8NwJgd8iVSOnjWCqR%2F%2Fx0KraMm%2FYuBZCJWfVDKxA8df9Yz6OX5XB2qPXA0c9F1DvLbYDZP7btXloR8RdQoEIb5dBdQ%3D%3D;"
+			// 			},
+			// 			"body": "token=xoxc-4684147883-3183999236788-4411640857313-b8215c23899763f5f3e048dedb3d8e2cdee8957a7f2eaafa7d81eccda9ca35d7",
+			// 			"method": "POST"
+			// 		}
+			// 	))
+			// }
+			contentEl.empty();
 		}
-		contentEl.empty();
 	}
 }
 
