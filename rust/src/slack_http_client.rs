@@ -5,7 +5,6 @@ use std::{
     sync::mpsc::channel, time,
 };
 use url::Url;
-use wasm_bindgen::JsValue;
 
 use crate::{slack_url::SlackUrl, RequestUrlParam};
 
@@ -38,7 +37,7 @@ impl SlackHttpClientConfig {
         validate_slack_api_cookie(cookie.as_str());
 
         SlackHttpClientConfig {
-            api_base: api_base.clone(),
+            api_base,
             token,
             cookie,
         }
@@ -114,7 +113,7 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         slack_url: &SlackUrl,
     ) -> Result<ClientReturnType, SlackHttpClientError> {
         match &slack_url.thread_ts {
-            Some(ts) => Ok(self.get_conversation_replies(&slack_url.channel_id, &ts)),
+            Some(ts) => Ok(self.get_conversation_replies(&slack_url.channel_id, ts)),
             None => Err(SlackHttpClientError::ThreadTsWasEmpty),
         }
     }

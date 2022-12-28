@@ -15,6 +15,9 @@
     "obsidian",
     "slack"
   ],
+  "dependencies": {
+    "obsidian": "latest"
+  },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^15.1.0",
     "@rollup/plugin-node-resolve": "^9.0.0",
@@ -22,7 +25,6 @@
     "@typescript-eslint/eslint-plugin": "5.29.0",
     "@typescript-eslint/parser": "5.29.0",
     "@wasm-tool/rollup-plugin-rust": "^2.3.2",
-    "obsidian": "latest",
     "rollup": "^2.32.1",
     "rollup-plugin-typescript2": "^0.34.1",
     "ts-loader": "^9.4.2",

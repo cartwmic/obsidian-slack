@@ -1,4 +1,5 @@
 import ObsidianSlackPlugin from "./index";
+
 export class LocalStorageSettings {
     private prefix: string;
     constructor(private readonly plugin: ObsidianSlackPlugin) {

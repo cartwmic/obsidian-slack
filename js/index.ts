@@ -1,6 +1,7 @@
 import wasm from "../rust/Cargo.toml"
-import { App, Modal, Plugin, PluginSettingTab, request, Setting } from 'obsidian';
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, Vault } from 'obsidian';
 import { LocalStorageSettings } from "localStorageSettings";
+
 
 interface ObsidianSlackPluginSettings {
 	apiToken: string;
@@ -12,7 +13,7 @@ const DEFAULT_SETTINGS: ObsidianSlackPluginSettings = {
 	cookie: 'default'
 }
 
-export default class ObisdianSlackPlugin extends Plugin {
+export default class ObsidianSlackPlugin extends Plugin {
 	settings: ObsidianSlackPluginSettings;
 	localStorage: LocalStorageSettings;
 
@@ -44,10 +45,10 @@ export default class ObisdianSlackPlugin extends Plugin {
 
 class GetSlackMessageModal extends Modal {
 	url: string;
-	plugin: ObisdianSlackPlugin;
-	get_slack_message: (apiToken: string, cookie: string, url: string) => any;
+	plugin: ObsidianSlackPlugin;
+	get_slack_message: (apiToken: string, cookie: string, url: string, vault: Vault) => any;
 
-	constructor(app: App, plugin: ObisdianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string) => any) {
+	constructor(app: App, plugin: ObsidianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string, vault: Vault) => any) {
 		super(app);
 		this.get_slack_message = get_slack_message;
 		this.plugin = plugin;
@@ -82,16 +83,17 @@ class GetSlackMessageModal extends Modal {
 			alert("apiToken or cookie was null, aborting operation")
 		}
 		else {
-			console.log(await this.get_slack_message(apiToken, cookie, this.url));
-			contentEl.empty();
+			await this.get_slack_message(apiToken, cookie, this.url, this.app.vault);
+			// let attachment_folder = vault.getConfig("attachmentFolderPath");
 		}
+		contentEl.empty();
 	}
 }
 
 class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
-	plugin: ObisdianSlackPlugin;
+	plugin: ObsidianSlackPlugin;
 
-	constructor(app: App, plugin: ObisdianSlackPlugin) {
+	constructor(app: App, plugin: ObsidianSlackPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -122,5 +124,12 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
 					console.log('onChange:cookie: ' + value);
 					this.plugin.localStorage.setCookie(value);
 				}));
+	}
+}
+
+export function combine_result(timestamp_result: any, thread_timestamp_result: any): any {
+	return {
+		"timestamp": JSON.parse(timestamp_result),
+		"thread_timestamp": JSON.parse(thread_timestamp_result)
 	}
 }

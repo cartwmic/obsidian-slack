@@ -3,6 +3,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import typescript from 'rollup-plugin-typescript2';
 import rust from "@wasm-tool/rollup-plugin-rust";
 
+
 const path = require("path");
 const banner =
   `/*
@@ -17,7 +18,7 @@ export default {
     file: path.resolve('../main.js'),
     sourcemap: 'inline',
     format: 'cjs',
-    exports: 'default',
+    // exports: 'default',
     banner,
   },
   external: ['obsidian'],
