@@ -84,7 +84,6 @@ class GetSlackMessageModal extends Modal {
 		}
 		else {
 			await this.get_slack_message(apiToken, cookie, this.url, this.app.vault);
-			// let attachment_folder = vault.getConfig("attachmentFolderPath");
 		}
 		contentEl.empty();
 	}

@@ -67,8 +67,6 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         config: SlackHttpClientConfig,
         request_func: fn(RequestUrlParam) -> ClientReturnType,
     ) -> SlackHttpClient<ClientReturnType> {
-        let log_prefix = "rust|new";
-
         SlackHttpClient {
             config,
             request_func,

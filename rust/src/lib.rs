@@ -4,26 +4,15 @@ mod utils;
 
 use js_sys::{JsString, Promise, JSON};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serde_wasm_bindgen::Serializer;
 use slack_http_client::{
     get_api_base, SlackHttpClient, SlackHttpClientConfig, SlackHttpClientError,
 };
 use slack_url::SlackUrl;
-use std::{
-    collections::HashMap,
-    fmt::format,
-    path::{self, Path},
-    str::FromStr,
-};
+use std::{collections::HashMap, path::Path, str::FromStr};
 use utils::set_panic_hook;
-use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast};
+use wasm_bindgen::prelude::*;
 
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 static ATTACHMENT_FOLDER_CONFIG_KEY: &str = "attachmentFolderPath";
 
 #[derive(Debug, Serialize, Deserialize)]
