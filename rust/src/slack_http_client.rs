@@ -1,9 +1,4 @@
-use serde::Serialize;
-use serde_wasm_bindgen::Serializer;
-use std::{
-    collections::HashMap, error::Error, future::Future, process::Output, str::FromStr,
-    sync::mpsc::channel, time,
-};
+use std::{collections::HashMap, str::FromStr};
 use url::Url;
 
 use crate::{slack_url::SlackUrl, RequestUrlParam};
