@@ -33,6 +33,9 @@ impl RequestUrlParam {
 #[wasm_bindgen()]
 extern "C" {
     fn alert(message: &str);
+
+    #[wasm_bindgen(js_namespace = ["navigator", "clipboard"])]
+    fn writeText(data: &str) -> Promise;
 }
 
 #[wasm_bindgen(module = "index")]
@@ -86,6 +89,7 @@ pub fn init_wasm(log_level: Option<String>) {
 #[wasm_bindgen]
 pub async fn get_slack_message(api_token: String, cookie: String, url: String, vault: Vault) {
     let log_prefix = "rust|get_slack_message";
+    let alert_prefix = "Obsidian Slack encountered a problem: Err: ";
 
     log::info!("{}|create slack client", log_prefix);
     let client = SlackHttpClient::<Promise>::new(
@@ -119,26 +123,30 @@ pub async fn get_slack_message(api_token: String, cookie: String, url: String, v
 
     log::info!("{}|create attachments file", log_prefix);
     let attachments_folder = vault.getConfig(ATTACHMENT_FOLDER_CONFIG_KEY);
-    let new_file_path = Path::new(&attachments_folder)
-        .join(
-            vec![
-                slack_url.channel_id,
-                slack_url.ts,
-                slack_url.thread_ts.unwrap_or_default(),
-            ]
-            .join("-"),
-        )
-        .with_extension("json");
+    let file_name = vec![
+        slack_url.channel_id,
+        slack_url.ts,
+        slack_url.thread_ts.unwrap_or_default(),
+    ]
+    .join("-")
+        + ".json";
 
-    match new_file_path.to_str() {
-        Some(path) => match wasm_bindgen_futures::JsFuture::from(vault.create(path, JSON::stringify_with_replacer_and_space(&combined_result, &JsValue::UNDEFINED, &JsValue::from_f64(2.0)).expect("There was a problem creating the file for the retrieved slack messages. Unable to stringify combined result of downloaded slack message"))).await {
-            Ok(_) => {
-                Notice::new_with_timeout("Successfully downloaded slack message and save to attachment file. Attachment file name saved to clipboard", 5000);
-                // todo save to clipboard
-            }
-            Err(err) => alert(&format!("There was a problem creating the file for the retrieved slack messages. Error creating the file for the downloaded messages. Error: {:#?}", err))
-        },
-        None => alert("There was a problem creating the file for the retrieved slack messages. Error creating new file path for downloaded messages")
+    let new_file_path = Path::new(&attachments_folder)
+        .join(&file_name)
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    match wasm_bindgen_futures::JsFuture::from(vault.create(&new_file_path, JSON::stringify_with_replacer_and_space(&combined_result, &JsValue::UNDEFINED, &JsValue::from_f64(2.0)).expect("There was a problem creating the file for the retrieved slack messages. Unable to stringify combined result of downloaded slack message"))).await {
+        Ok(_) => {
+            log::info!("{}|save to clipboard", log_prefix);
+            match wasm_bindgen_futures::JsFuture::from(writeText(&file_name)).await {
+                Ok(_) => (),
+                Err(err) => alert(&format!("There was a problem copying the slack messages' filename to clipboard. Error: {:#?}", err))
+            };
+            Notice::new_with_timeout("Successfully downloaded slack message and saved to attachment file. Attachment file name saved to clipboard", 5000);
+        }
+        Err(err) => alert(&format!("There was a problem creating the file for the retrieved slack messages. Error creating the file for the downloaded messages. Error: {:#?}", err))
     }
 }
 
