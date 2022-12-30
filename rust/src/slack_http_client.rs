@@ -1,13 +1,14 @@
 use std::{collections::HashMap, str::FromStr};
 use url::Url;
 
-use crate::{slack_url::SlackUrl, RequestUrlParam};
+use crate::{
+    errors::{SlackError, SlackHttpClientError},
+    slack_url::SlackUrl,
+    RequestUrlParam,
+};
 
 pub fn get_api_base() -> Url {
-    match Url::from_str("https://slack.com/api/") {
-        Ok(val) => val,
-        Err(_) => panic!("shouldn't get here"),
-    }
+    Url::from_str("https://slack.com/api/").unwrap()
 }
 
 pub struct SlackHttpClientConfig {
@@ -17,7 +18,11 @@ pub struct SlackHttpClientConfig {
 }
 
 impl SlackHttpClientConfig {
-    pub fn new(api_base: Url, token: String, cookie: String) -> SlackHttpClientConfig {
+    pub fn new(
+        api_base: Url,
+        token: String,
+        cookie: String,
+    ) -> Result<SlackHttpClientConfig, SlackError> {
         let log_prefix = "rust|SlackHttpClientConfig|new";
         log::info!(
             "{}|api_base={}|token={}|cookie={}",
@@ -28,19 +33,20 @@ impl SlackHttpClientConfig {
         );
 
         log::info!("{}|validate token", &log_prefix);
-        validate_slack_api_token(token.as_str());
-        validate_slack_api_cookie(cookie.as_str());
+        let token = validate_slack_api_token(token.as_str());
+        let cookie = validate_slack_api_cookie(cookie.as_str());
 
-        SlackHttpClientConfig {
-            api_base,
-            token,
-            cookie,
+        match (token, cookie) {
+            (Ok(the_token), Ok(the_cookie)) => Ok(SlackHttpClientConfig {
+                api_base,
+                token: the_token.to_string(),
+                cookie: the_cookie.to_string(),
+            }),
+            (Err(a), Err(b)) => Err(a),
+            (Err(a), Ok(_)) => Err(a),
+            (Ok(_), Err(b)) => Err(b),
         }
     }
-}
-
-pub enum SlackHttpClientError {
-    ThreadTsWasEmpty,
 }
 
 #[derive(strum_macros::Display)]
@@ -104,11 +110,11 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
     pub fn get_conversation_replies_using_thread_ts(
         &self,
         slack_url: &SlackUrl,
-    ) -> Result<ClientReturnType, SlackHttpClientError> {
-        match &slack_url.thread_ts {
-            Some(ts) => Ok(self.get_conversation_replies(&slack_url.channel_id, ts)),
-            None => Err(SlackHttpClientError::ThreadTsWasEmpty),
-        }
+    ) -> Option<ClientReturnType> {
+        slack_url
+            .thread_ts
+            .as_ref()
+            .map(|ts| self.get_conversation_replies(&slack_url.channel_id, ts))
     }
 
     pub fn get_conversation_replies_using_ts(&self, slack_url: &SlackUrl) -> ClientReturnType {
@@ -135,22 +141,23 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
     }
 }
 
-fn validate_slack_api_token(api_token: &str) {
-    let log_prefix = "rust|validate_slack_api_token";
+fn validate_slack_api_token(api_token: &str) -> Result<&str, SlackError> {
     if !api_token.starts_with("xoxc") {
-        panic!(
-            "{}|api token does not start with 'xoxc'. api token invalid|api_token={}",
-            log_prefix, api_token
-        )
+        Err(SlackError::SlackHttpClientError(
+            SlackHttpClientError::InvalidApiToken("Did not start with 'xoxc'".to_string()),
+        ))
+    } else {
+        Ok(api_token)
     }
 }
 
-fn validate_slack_api_cookie(cookie: &str) {
+fn validate_slack_api_cookie(cookie: &str) -> Result<&str, SlackError> {
     let log_prefix = "rust|validate_slack_api_cookie";
     if !cookie.starts_with("xoxd") {
-        panic!(
-            "{}|api cookie does not start with 'xoxd'. api token invalid|cookie={}",
-            log_prefix, cookie
-        )
+        Err(SlackError::SlackHttpClientError(
+            SlackHttpClientError::InvalidApiCookie("Did not start with 'xoxd'".to_string()),
+        ))
+    } else {
+        Ok(cookie)
     }
 }
