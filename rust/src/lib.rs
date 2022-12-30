@@ -1,8 +1,16 @@
+//! This crate provides an Obsidian friendly interface to retrieve
+//! Slack messages from the Slack web api and save them to your Obsidian
+//! vault without needing to create apps in Slack itself
+//!
+//! This is possible by using Slack's web interface's 'xoxc' token and
+//! corresponding 'xoxd' cookie.
+
 mod errors;
 mod slack_http_client;
 mod slack_url;
 mod utils;
 
+use do_notation::m;
 use js_sys::{JsString, Promise, JSON};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::Serializer;
@@ -85,21 +93,43 @@ pub fn init_wasm(log_level: Option<String>) {
     };
 }
 
+/// Interface to get slack messages and save to your obsidian vault
+///
+/// You can get the `api_token` and `cookie` from Slack's web interface by:
+/// 1. Navigate to and login to your Slack workspace in your browser
+/// 2. Open your browsers developer console
+/// 3. Paste the following snippet into the console:
+/// ```javascript
+/// JSON.parse(localStorage.localConfig_v2).teams[document.location.pathname.match(/^\/client\/(T[A-Z0-9]+)/)[1]].token
+/// ```
+/// 4. Save the result. This is your `api_token`
+/// 5. In the developer console, navigate to the cookies
+/// 6. Find the cookie with key 'd' (it's valuel should start with 'xoxd...')
+/// 7. Save the cookies value. This is your `cookie`
+///
+/// The `url` is a valid slack url. Most commonly, this is retrieved from Slack's
+/// web interface/web app by right clicking any message/thread and copying it's
+/// link
+///
+/// The `vault` is the Obisidian vault to save the messages to. See:
+/// https://marcus.se.net/obsidian-plugin-docs/vault
+///
+/// Panics:
+/// The function is designed to catch all errors and display an alert in Obsidian
+/// with the error.
 #[wasm_bindgen]
 pub async fn get_slack_message(api_token: String, cookie: String, url: String, vault: Vault) {
-    let results_from_api = match SlackHttpClientConfig::new(get_api_base(), api_token, cookie)
-        .map(|config| SlackHttpClient::<Promise>::new(config, make_request))
-        .and_then(|client| {
-            let slack_url = SlackUrl::new(&url);
-            slack_url.map(|url| (client, url))
-        })
-        .map(|(client, url)| {
-            let ts_future = wasm_bindgen_futures::JsFuture::from(
-                client.get_conversation_replies_using_ts(&url),
-            );
-            let thread_ts_option = client.get_conversation_replies_using_thread_ts(&url);
-            (client, url, ts_future, thread_ts_option)
-        }) {
+    // separate statements for intermediate results due to `and_then` closures not allowing await
+    let results_from_api = match m! {
+        config <- SlackHttpClientConfig::new(get_api_base(), api_token, cookie);
+        let client = SlackHttpClient::<Promise>::new(config, make_request);
+        slack_url <- SlackUrl::new(&url);
+        let ts = wasm_bindgen_futures::JsFuture::from(
+            client.get_conversation_replies_using_ts(&slack_url),
+        );
+        let thread_ts = client.get_conversation_replies_using_thread_ts(&slack_url);
+        return (client, slack_url, ts, thread_ts);
+    } {
         Ok((_, url, ts_future, thread_ts_option)) => {
             let ts_result = ts_future.await.map_err(errors::SlackError::JsError);
             let thread_ts = match thread_ts_option {
@@ -114,7 +144,9 @@ pub async fn get_slack_message(api_token: String, cookie: String, url: String, v
         Err(err) => Err(err),
     };
 
-    let file_creation_result = match results_from_api.and_then(|(result, slack_url)| {
+    let file_creation_result = match m! {
+        result <- results_from_api;
+        let (result, slack_url) = result;
         let attachments_folder = vault.getConfig(ATTACHMENT_FOLDER_CONFIG_KEY);
         let file_name = vec![
             slack_url.channel_id,
@@ -128,12 +160,11 @@ pub async fn get_slack_message(api_token: String, cookie: String, url: String, v
             .to_str()
             .unwrap()
             .to_string();
-
-        JSON::stringify_with_replacer_and_space(&result, &JsValue::NULL, &JsValue::from_f64(2.0))
-            .map_err(errors::SlackError::JsError)
-            .map(|json_str| (json_str, file_name, new_file_path))
-    }) {
-        Ok((json_str, file_name, new_file_path)) => {
+        json_str <- JSON::stringify_with_replacer_and_space(&result, &JsValue::NULL, &JsValue::from_f64(2.0))
+            .map_err(errors::SlackError::JsError);
+        return (json_str, file_name, new_file_path, vault);
+    } {
+        Ok((json_str, file_name, new_file_path, vault)) => {
             wasm_bindgen_futures::JsFuture::from(vault.create(&new_file_path, json_str))
                 .await
                 .map_err(errors::SlackError::JsError)
@@ -164,3 +195,13 @@ fn make_request(params: RequestUrlParam) -> Promise {
     let serializer = Serializer::json_compatible();
     request(params.serialize(&serializer).unwrap())
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn get_slack_message_alerts_on_bad_input_strings {
+
+//     }
+// }

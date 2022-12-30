@@ -152,7 +152,6 @@ fn validate_slack_api_token(api_token: &str) -> Result<&str, SlackError> {
 }
 
 fn validate_slack_api_cookie(cookie: &str) -> Result<&str, SlackError> {
-    let log_prefix = "rust|validate_slack_api_cookie";
     if !cookie.starts_with("xoxd") {
         Err(SlackError::SlackHttpClientError(
             SlackHttpClientError::InvalidApiCookie("Did not start with 'xoxd'".to_string()),
