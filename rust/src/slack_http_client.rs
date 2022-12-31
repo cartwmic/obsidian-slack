@@ -143,7 +143,7 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
 
 fn validate_slack_api_token(api_token: &str) -> Result<&str, SlackError> {
     if !api_token.starts_with("xoxc") {
-        Err(SlackError::SlackHttpClientError(
+        Err(SlackError::SlackHttpClient(
             SlackHttpClientError::InvalidApiToken("Did not start with 'xoxc'".to_string()),
         ))
     } else {
@@ -153,7 +153,7 @@ fn validate_slack_api_token(api_token: &str) -> Result<&str, SlackError> {
 
 fn validate_slack_api_cookie(cookie: &str) -> Result<&str, SlackError> {
     if !cookie.starts_with("xoxd") {
-        Err(SlackError::SlackHttpClientError(
+        Err(SlackError::SlackHttpClient(
             SlackHttpClientError::InvalidApiCookie("Did not start with 'xoxd'".to_string()),
         ))
     } else {

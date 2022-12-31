@@ -19,7 +19,7 @@ pub struct SlackUrl {
 impl SlackUrl {
     pub fn new(url_string: &str) -> Result<SlackUrl, SlackError> {
         m! {
-            url <- url::Url::from_str(url_string).map_err(|parse_err| SlackError::SlackUrlError(SlackUrlError::UrlParseError(
+            url <- url::Url::from_str(url_string).map_err(|parse_err| SlackError::SlackUrl(SlackUrlError::UrlParse(
                 format!(
                     "There was an issue parsing the following slack url: {}",
                     url_string
@@ -47,12 +47,9 @@ impl SlackUrl {
                 .into_iter()
                 .map(String::from)
                 .collect::<Vec<String>>()),
-            None => Err(SlackError::SlackUrlError(
-                SlackUrlError::PathSegmentsNotFoundError(format!(
-                    "No path segments found for url: {}",
-                    url
-                )),
-            )),
+            None => Err(SlackError::SlackUrl(SlackUrlError::PathSegmentsNotFound(
+                format!("No path segments found for url: {}", url),
+            ))),
         }
     }
 
@@ -64,7 +61,7 @@ impl SlackUrl {
                 segment.starts_with('C') || segment.starts_with('D') || segment.starts_with('G')
             }) {
                 Some(found) => Ok(found.to_string()),
-                None => Err(SlackError::SlackUrlError(SlackUrlError::ChannelIdNotFoundError(format!("No channel ID found. Channel id must strat with 'C', 'D', or 'G'. path segments: {:#?}", path_segments))))
+                None => Err(SlackError::SlackUrl(SlackUrlError::ChannelIdNotFound(format!("No channel ID found. Channel id must strat with 'C', 'D', or 'G'. path segments: {:#?}", path_segments))))
             }
     }
 
@@ -75,19 +72,13 @@ impl SlackUrl {
         {
             Some(segment) => match segment.split_terminator('p').last() {
                 Some(item) => Ok(item.split_at(10).to_vec().join(".")),
-                None => Err(SlackError::SlackUrlError(
-                    SlackUrlError::ParseTimestampError(format!(
-                        "url= {}. path segments= {:#?}",
-                        url, path_segments
-                    )),
-                )),
+                None => Err(SlackError::SlackUrl(SlackUrlError::ParseTimestamp(
+                    format!("url= {}. path segments= {:#?}", url, path_segments),
+                ))),
             },
-            None => Err(SlackError::SlackUrlError(
-                SlackUrlError::TimestampNotFoundError(format!(
-                    "url= {}. path segments= {:#?}",
-                    url, path_segments
-                )),
-            )),
+            None => Err(SlackError::SlackUrl(SlackUrlError::TimestampNotFound(
+                format!("url= {}. path segments= {:#?}", url, path_segments),
+            ))),
         }
     }
 

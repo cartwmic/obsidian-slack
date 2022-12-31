@@ -119,66 +119,12 @@ pub fn init_wasm(log_level: Option<String>) {
 /// with the error.
 #[wasm_bindgen]
 pub async fn get_slack_message(api_token: String, cookie: String, url: String, vault: Vault) {
-    // separate statements for intermediate results due to `and_then` closures not allowing await
-    let results_from_api = match m! {
-        config <- SlackHttpClientConfig::new(get_api_base(), api_token, cookie);
-        let client = SlackHttpClient::<Promise>::new(config, make_request);
-        slack_url <- SlackUrl::new(&url);
-        let ts = wasm_bindgen_futures::JsFuture::from(
-            client.get_conversation_replies_using_ts(&slack_url),
-        );
-        let thread_ts = client.get_conversation_replies_using_thread_ts(&slack_url);
-        return (client, slack_url, ts, thread_ts);
-    } {
-        Ok((_, url, ts_future, thread_ts_option)) => {
-            let ts_result = ts_future.await.map_err(errors::SlackError::JsError);
-            let thread_ts = match thread_ts_option {
-                Some(promise) => match wasm_bindgen_futures::JsFuture::from(promise).await {
-                    Ok(val) => val,
-                    Err(err) => err,
-                },
-                None => JsValue::NULL,
-            };
-            ts_result.map(|val| (combine_result(&val, &thread_ts), url))
-        }
-        Err(err) => Err(err),
-    };
+    // separate calls for intermediate results due to `and_then` closures not allowing await
+    let results_from_api = get_results_from_api(api_token, cookie, url).await;
 
-    let file_creation_result = match m! {
-        result <- results_from_api;
-        let (result, slack_url) = result;
-        let attachments_folder = vault.getConfig(ATTACHMENT_FOLDER_CONFIG_KEY);
-        let file_name = vec![
-            slack_url.channel_id,
-            slack_url.ts,
-            slack_url.thread_ts.unwrap_or_default(),
-        ]
-        .join("-")
-            + ".json";
-        let new_file_path = Path::new(&attachments_folder)
-            .join(&file_name)
-            .to_str()
-            .unwrap()
-            .to_string();
-        json_str <- JSON::stringify_with_replacer_and_space(&result, &JsValue::NULL, &JsValue::from_f64(2.0))
-            .map_err(errors::SlackError::JsError);
-        return (json_str, file_name, new_file_path, vault);
-    } {
-        Ok((json_str, file_name, new_file_path, vault)) => {
-            wasm_bindgen_futures::JsFuture::from(vault.create(&new_file_path, json_str))
-                .await
-                .map_err(errors::SlackError::JsError)
-                .map(|_| file_name)
-        }
-        Err(err) => Err(err),
-    };
+    let file_creation_result = create_file_from_result(results_from_api, vault).await;
 
-    let clipboard_save_result = match file_creation_result {
-        Ok(file_name) => wasm_bindgen_futures::JsFuture::from(writeText(&file_name))
-            .await
-            .map_err(errors::SlackError::JsError),
-        Err(err) => Err(err),
-    };
+    let clipboard_save_result = save_to_clipboard(file_creation_result).await;
 
     match clipboard_save_result {
         Ok(_) => {
@@ -196,12 +142,77 @@ fn make_request(params: RequestUrlParam) -> Promise {
     request(params.serialize(&serializer).unwrap())
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+async fn get_results_from_api(
+    api_token: String,
+    cookie: String,
+    url: String,
+) -> Result<(JsValue, SlackUrl), errors::SlackError> {
+    match m! {
+        config <- SlackHttpClientConfig::new(get_api_base(), api_token, cookie);
+        let client = SlackHttpClient::<Promise>::new(config, make_request);
+        slack_url <- SlackUrl::new(&url);
+        let ts = wasm_bindgen_futures::JsFuture::from(
+            client.get_conversation_replies_using_ts(&slack_url),
+        );
+        let thread_ts = client.get_conversation_replies_using_thread_ts(&slack_url);
+        return (client, slack_url, ts, thread_ts);
+    } {
+        Ok((_, url, ts_future, thread_ts_option)) => {
+            let ts_result = ts_future.await.map_err(errors::SlackError::Js);
+            let thread_ts = match thread_ts_option {
+                Some(promise) => match wasm_bindgen_futures::JsFuture::from(promise).await {
+                    Ok(val) => val,
+                    Err(err) => err,
+                },
+                None => JsValue::NULL,
+            };
+            ts_result.map(|val| (combine_result(&val, &thread_ts), url))
+        }
+        Err(err) => Err(err),
+    }
+}
 
-//     #[test]
-//     fn get_slack_message_alerts_on_bad_input_strings {
+async fn create_file_from_result(
+    results_from_api: Result<(JsValue, SlackUrl), errors::SlackError>,
+    vault: Vault,
+) -> Result<String, errors::SlackError> {
+    match m! {
+        result <- results_from_api;
+        let (result, slack_url) = result;
+        let attachments_folder = vault.getConfig(ATTACHMENT_FOLDER_CONFIG_KEY);
+        let file_name = vec![
+            slack_url.channel_id,
+            slack_url.ts,
+            slack_url.thread_ts.unwrap_or_default(),
+        ]
+        .join("-")
+            + ".json";
+        let new_file_path = Path::new(&attachments_folder)
+            .join(&file_name)
+            .to_str()
+            .unwrap()
+            .to_string();
+        json_str <- JSON::stringify_with_replacer_and_space(&result, &JsValue::NULL, &JsValue::from_f64(2.0))
+            .map_err(errors::SlackError::Js);
+        return (json_str, file_name, new_file_path, vault);
+    } {
+        Ok((json_str, file_name, new_file_path, vault)) => {
+            wasm_bindgen_futures::JsFuture::from(vault.create(&new_file_path, json_str))
+                .await
+                .map_err(errors::SlackError::Js)
+                .map(|_| file_name)
+        }
+        Err(err) => Err(err),
+    }
+}
 
-//     }
-// }
+async fn save_to_clipboard(
+    file_creation_result: Result<String, errors::SlackError>,
+) -> Result<JsValue, errors::SlackError> {
+    match file_creation_result {
+        Ok(file_name) => wasm_bindgen_futures::JsFuture::from(writeText(&file_name))
+            .await
+            .map_err(errors::SlackError::Js),
+        Err(err) => Err(err),
+    }
+}

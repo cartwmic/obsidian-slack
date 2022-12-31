@@ -30,37 +30,37 @@ impl Error for SlackHttpClientError {}
 
 #[derive(Debug)]
 pub enum SlackUrlError {
-    UrlParseError(String, ParseError),
-    PathSegmentsNotFoundError(String),
-    ChannelIdNotFoundError(String),
-    TimestampNotFoundError(String),
-    ParseTimestampError(String),
+    UrlParse(String, ParseError),
+    PathSegmentsNotFound(String),
+    ChannelIdNotFound(String),
+    TimestampNotFound(String),
+    ParseTimestamp(String),
 }
 
 impl Display for SlackUrlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SlackUrlError::UrlParseError(err_msg, err) => write!(
+            SlackUrlError::UrlParse(err_msg, err) => write!(
                     f,
                     "An error occurred while parsing the slack url. Error message: {}. Error: {}",
                     err_msg, err
                 ),
-            SlackUrlError::PathSegmentsNotFoundError(err_msg) => write!(
+            SlackUrlError::PathSegmentsNotFound(err_msg) => write!(
                     f,
                     "There was an issue parsing path segments for the url. Error msg: {}",
                     err_msg
                 ),
-            SlackUrlError::ChannelIdNotFoundError(err_msg) => write!(
+            SlackUrlError::ChannelIdNotFound(err_msg) => write!(
                     f,
                     "There was an issue parsing channel ID for the url. Error msg: {}",
                     err_msg
                 ),
-            SlackUrlError::TimestampNotFoundError(err_msg) => write!(
+            SlackUrlError::TimestampNotFound(err_msg) => write!(
                     f,
                     "There was an issue parsing the timestamp for the url, timestamp was not found. Error msg: {}",
                     err_msg
                 ),
-            SlackUrlError::ParseTimestampError(err_msg) => write!(
+            SlackUrlError::ParseTimestamp(err_msg) => write!(
                     f,
                     "There was an issue parsing the timestamp for the url Error msg: {}",
                     err_msg
@@ -73,7 +73,7 @@ impl Error for SlackUrlError {}
 
 #[derive(Debug)]
 pub enum SlackError {
-    SlackUrlError(SlackUrlError),
-    SlackHttpClientError(SlackHttpClientError),
-    JsError(JsValue),
+    SlackUrl(SlackUrlError),
+    SlackHttpClient(SlackHttpClientError),
+    Js(JsValue),
 }
