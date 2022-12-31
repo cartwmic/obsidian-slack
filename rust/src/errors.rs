@@ -5,7 +5,6 @@ use wasm_bindgen::JsValue;
 
 #[derive(Debug)]
 pub enum SlackHttpClientError {
-    ThreadTsWasEmpty,
     InvalidApiToken(String),
     InvalidApiCookie(String),
 }
@@ -13,9 +12,6 @@ pub enum SlackHttpClientError {
 impl Display for SlackHttpClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SlackHttpClientError::ThreadTsWasEmpty => {
-                write!(f, "Thread timestamp was empty")
-            }
             SlackHttpClientError::InvalidApiToken(error_msg) => {
                 write!(f, "Provided api token was invalid: {}", error_msg)
             }
@@ -76,4 +72,9 @@ pub enum SlackError {
     SlackUrl(SlackUrlError),
     SlackHttpClient(SlackHttpClientError),
     Js(JsValue),
+    ResponseNotOk(String),
+    ResponseOkNotABoolean(String),
+    ResponseNotAnObject(String),
+    ResponseMissingOkField(String),
+    EmptyResult(String),
 }

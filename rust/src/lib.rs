@@ -11,6 +11,7 @@ mod slack_url;
 mod utils;
 
 use do_notation::m;
+use errors::SlackError;
 use js_sys::{JsString, Promise, JSON};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::Serializer;
@@ -142,6 +143,35 @@ fn make_request(params: RequestUrlParam) -> Promise {
     request(params.serialize(&serializer).unwrap())
 }
 
+fn validate_result(val: JsValue) -> Result<JsValue, SlackError> {
+    // results from the `request` function of obsidian return strings
+    m! {
+        let key = "ok";
+        str_val <- val
+                   .as_string()
+                   .map_or(Err(errors::SlackError::EmptyResult(format!("{:#?}", val))), Ok);
+        obj_val <- JSON::parse(&str_val)
+                   .map_err(|err| errors::SlackError::ResponseNotAnObject(format!("{:#?} | {:#?}", err, val)));
+        _ <- js_sys::Reflect::has(&obj_val, &JsValue::from_str(key))
+             .map_err(|err| errors::SlackError::ResponseMissingOkField(format!("{:#?} | {:#?}", err, obj_val)))
+             .and_then(|has_ok| {
+                if has_ok {Ok(has_ok)} else {Err(errors::SlackError::ResponseMissingOkField("".to_string()))}
+             });
+        is_ok <- js_sys::Reflect::get(&obj_val, &JsValue::from_str(key))
+                 .map_err(|err| errors::SlackError::ResponseMissingOkField(format!("{:#?} | {:#?}", err, obj_val)));
+        is_ok <- is_ok
+                 .as_bool()
+                 .map_or(Err(errors::SlackError::ResponseOkNotABoolean(format!("{:#?}", obj_val))), Ok);
+        return (is_ok, val);
+    }.and_then(|(is_ok, val)| {
+        if is_ok {
+            Ok(val)
+        } else {
+            Err(SlackError::ResponseNotOk(format!("{:#?}", val)))
+        }
+    })
+}
+
 async fn get_results_from_api(
     api_token: String,
     cookie: String,
@@ -157,16 +187,23 @@ async fn get_results_from_api(
         let thread_ts = client.get_conversation_replies_using_thread_ts(&slack_url);
         return (client, slack_url, ts, thread_ts);
     } {
-        Ok((_, url, ts_future, thread_ts_option)) => {
-            let ts_result = ts_future.await.map_err(errors::SlackError::Js);
-            let thread_ts = match thread_ts_option {
-                Some(promise) => match wasm_bindgen_futures::JsFuture::from(promise).await {
-                    Ok(val) => val,
-                    Err(err) => err,
-                },
-                None => JsValue::NULL,
+        Ok((_, url, ts, thread_ts)) => {
+            let ts = ts
+                .await
+                .map_err(errors::SlackError::Js)
+                .and_then(validate_result);
+            let thread_ts = match thread_ts {
+                Some(promise) => wasm_bindgen_futures::JsFuture::from(promise)
+                    .await
+                    .map_err(errors::SlackError::Js)
+                    .and_then(validate_result),
+                None => Ok(JsValue::NULL),
             };
-            ts_result.map(|val| (combine_result(&val, &thread_ts), url))
+            m! {
+                ts <- ts;
+                thread_ts <- thread_ts;
+                return (combine_result(&ts, &thread_ts), url);
+            }
         }
         Err(err) => Err(err),
     }
