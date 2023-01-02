@@ -34,6 +34,7 @@ pub trait SlackResponseValidator {
         if self.ok().unwrap() {
             Ok(self)
         } else {
+            log::info!("{:#?}", self);
             Err(SlackError::ResponseNotOk(format!("{:#?}", self)))
         }
     }

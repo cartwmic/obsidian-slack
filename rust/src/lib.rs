@@ -19,6 +19,7 @@ use js_sys::{JsString, Promise, JSON};
 use messages::Message;
 use serde::{Deserialize, Serialize};
 use slack_url::SlackUrl;
+use std::fmt::Write;
 use std::{collections::HashMap, path::Path, str::FromStr};
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
@@ -226,10 +227,11 @@ pub async fn get_slack_message(api_token: String, cookie: String, url: String, v
         Ok(_) => {
             Notice::new_with_timeout("Successfully downloaded slack message and saved to attachment file. Attachment file name saved to clipboard", 5000);
         }
-        Err(err) => alert(&format!(
-            "There was a problem getting slack messages. Error: {:#?}",
-            err
-        )),
+        Err(err) => {
+            let message = format!("There was a problem getting slack messages. Error: {}", err);
+            log::error!("{}", &message);
+            alert(&message)
+        }
     }
 }
 

@@ -63,7 +63,7 @@ impl SlackUrl {
                 segment.starts_with('C') || segment.starts_with('D') || segment.starts_with('G')
             }) {
                 Some(found) => Ok(found.to_string()),
-                None => Err(SlackError::SlackUrl(SlackUrlError::ChannelIdNotFound(format!("No channel ID found. Channel id must strat with 'C', 'D', or 'G'. path segments: {:#?}", path_segments))))
+                None => Err(SlackError::SlackUrl(SlackUrlError::ChannelIdNotFound(format!("No channel ID found. Channel id must start with 'C', 'D', or 'G'. path segments: {:#?}", path_segments))))
             }
     }
 
