@@ -1,14 +1,26 @@
-use std::{borrow::Borrow, collections::HashMap, fmt::Debug, str::FromStr, sync::mpsc::channel};
+use serde::{Deserialize, Serialize};
+use std::{borrow::Borrow, collections::HashMap, str::FromStr};
 use url::Url;
 
-use crate::{
-    errors::{SlackError, SlackHttpClientError},
-    slack_url::SlackUrl,
-    RequestUrlParam,
-};
+use crate::errors::{SlackError, SlackHttpClientError};
 
 pub fn get_api_base() -> Url {
-    Url::from_str("https://slack.com/api/").unwrap()
+    Url::from_str("https://slack.com/api").unwrap()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RequestUrlParam {
+    url: String,
+    method: String,
+    headers: HashMap<String, String>,
+    body: Option<String>,
+}
+
+impl RequestUrlParam {
+    fn with_url(mut self, url: String) -> Self {
+        self.url = url;
+        self
+    }
 }
 
 pub trait SlackResponseValidator {
@@ -109,10 +121,10 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         request_url
     }
 
-    fn build_base_request(&self, method: String) -> RequestUrlParam {
+    fn build_base_post_request(&self) -> RequestUrlParam {
         RequestUrlParam {
             url: "".to_string(),
-            method,
+            method: "POST".to_string(),
             headers: HashMap::from([
                 (
                     "content-type".to_string(),
@@ -120,7 +132,26 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
                 ),
                 ("cookie".to_string(), "d=".to_string() + &self.config.cookie),
             ]),
-            body: format!("token={}", self.config.token),
+            body: Some(format!("token={}", self.config.token)),
+        }
+    }
+
+    fn build_base_get_request(&self) -> RequestUrlParam {
+        RequestUrlParam {
+            url: "".to_string(),
+            method: "GET".to_string(),
+            headers: HashMap::from([
+                (
+                    "content-type".to_string(),
+                    "application/x-www-form-urlencoded".to_string(),
+                ),
+                ("cookie".to_string(), "d=".to_string() + &self.config.cookie),
+                (
+                    "authorization".to_string(),
+                    format!("Bearer {}", self.config.token),
+                ),
+            ]),
+            body: None,
         }
     }
 
@@ -145,7 +176,7 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
 
         log::info!("{}|build request object", &log_prefix);
         let the_request = self
-            .build_base_request("POST".to_string())
+            .build_base_post_request()
             .with_url(request_url.to_string());
 
         log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);
@@ -157,11 +188,11 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         log::info!("{}|user_id={}", &log_prefix, user_id);
 
         log::info!("{}|build request url", &log_prefix);
-        let request_url = self.build_request_uri("user.info", vec![("user_id", user_id)]);
+        let request_url = self.build_request_uri("users.info", vec![("user", user_id)]);
 
         log::info!("{}|build request object", &log_prefix);
         let the_request = self
-            .build_base_request("GET".to_string())
+            .build_base_get_request()
             .with_url(request_url.to_string());
 
         log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);

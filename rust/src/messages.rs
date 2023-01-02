@@ -1,17 +1,16 @@
 use std::collections::HashSet;
 
-use do_notation::m;
-use js_sys::{Promise, JSON};
+use js_sys::Promise;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
 
 use crate::{
     errors::{self, SlackError},
-    make_request,
     slack_http_client::{
         get_api_base, SlackHttpClient, SlackHttpClientConfig, SlackResponseValidator,
     },
     slack_url::SlackUrl,
+    utils::{convert_result_string_to_object, make_request},
 };
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -36,13 +35,13 @@ impl MessageAndThread {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
-    pub r#type: String,
-    pub user: String,
-    pub text: String,
-    pub thread_ts: String,
-    pub reply_count: u16,
-    pub team: String,
-    pub ts: String,
+    pub r#type: Option<String>,
+    pub user: Option<String>,
+    pub text: Option<String>,
+    pub thread_ts: Option<String>,
+    pub reply_count: Option<u16>,
+    pub team: Option<String>,
+    pub ts: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -79,13 +78,13 @@ impl MessageResponse {
     }
 
     fn copy_from_existing_given_seed_ts(&self, seed_ts: &str) -> MessageResponse {
-        let mut copy = self.to_owned().clone();
+        let mut copy = self.to_owned();
         copy.is_thread = Some(false);
         copy.messages = Some(
             copy.messages
                 .unwrap()
                 .into_iter()
-                .filter(|message| message.ts == seed_ts)
+                .filter(|message| message.ts.as_ref().unwrap() == seed_ts)
                 .collect(),
         );
         copy
@@ -94,8 +93,8 @@ impl MessageResponse {
     pub fn collect_users(&self) -> Option<Vec<String>> {
         self.messages.as_ref().map(|messages| {
             messages
-                .into_iter()
-                .map(|message| message.user.to_string())
+                .iter()
+                .map(|message| message.user.as_ref().unwrap().to_string())
                 .collect()
         })
     }
@@ -107,41 +106,6 @@ impl SlackResponseValidator for MessageResponse {
     }
 }
 
-// pub fn validate_result(val: JsValue) -> Result<JsValue, SlackError> {
-//     m! {
-//         let key = "ok";
-//         _ <- js_sys::Reflect::has(&val, &JsValue::from_str(key))
-//              .map_err(|err| errors::SlackError::ResponseMissingOkField(format!("{:#?} | {:#?}", err, val)))
-//              .and_then(|has_ok| {
-//                 if has_ok {Ok(has_ok)} else {Err(errors::SlackError::ResponseMissingOkField("".to_string()))}
-//              });
-//         is_ok <- js_sys::Reflect::get(&val, &JsValue::from_str(key))
-//                  .map_err(|err| errors::SlackError::ResponseMissingOkField(format!("{:#?} | {:#?}", err, val)));
-//         is_ok <- is_ok
-//                  .as_bool()
-//                  .map_or(Err(errors::SlackError::ResponseOkNotABoolean(format!("{:#?}", val))), Ok);
-//         return (is_ok, val);
-//     }.and_then(|(is_ok, val)| {
-//         if is_ok {
-//             Ok(val)
-//         } else {
-//             Err(SlackError::ResponseNotOk(format!("{:#?}", val)))
-//         }
-//     })
-// }
-
-pub fn convert_result_string_to_object(val: JsValue) -> Result<JsValue, SlackError> {
-    // results from the `request` function of obsidian return strings
-    m! {
-        str_val <- val
-                   .as_string()
-                   .map_or(Err(errors::SlackError::EmptyResult(format!("{:#?}", val))), Ok);
-        obj_val <- JSON::parse(&str_val)
-                   .map_err(|err| errors::SlackError::ResponseNotAnObject(format!("{:#?} | {:#?}", err, val)));
-        return obj_val;
-    }
-}
-
 pub async fn get_messages_from_api(
     api_token: &str,
     cookie: &str,
@@ -150,7 +114,7 @@ pub async fn get_messages_from_api(
     let client =
         SlackHttpClientConfig::new(get_api_base(), api_token.to_string(), cookie.to_string())
             .map(|config| SlackHttpClient::<Promise>::new(config, make_request));
-    let client_and_url = client.and_then(|client| SlackUrl::new(&url).map(|url| (client, url)));
+    let client_and_url = client.and_then(|client| SlackUrl::new(url).map(|url| (client, url)));
     match client_and_url {
         Ok((client, slack_url)) => {
             let thread_ts = match slack_url.thread_ts.clone() {

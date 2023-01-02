@@ -8,10 +8,11 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::{
     errors::SlackError,
-    make_request,
     slack_http_client::{
         get_api_base, SlackHttpClient, SlackHttpClientConfig, SlackResponseValidator,
     },
+    utils::convert_result_string_to_object,
+    utils::make_request,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -43,7 +44,7 @@ pub async fn get_users_from_api(
     let users: Result<Vec<JsFuture>, SlackError> = m! {
         config <- SlackHttpClientConfig::new(get_api_base(), api_token.to_string(), cookie.to_string());
         let client = SlackHttpClient::<Promise>::new(config, make_request);
-        let users = user_ids.iter().map(|user_id| JsFuture::from(client.get_user_info(&user_id))).collect();
+        let users = user_ids.iter().map(|user_id| JsFuture::from(client.get_user_info(user_id))).collect();
         return (users);
     };
 
@@ -52,11 +53,14 @@ pub async fn get_users_from_api(
             .await
             .into_iter()
             .map(|result| {
-                result.map_err(SlackError::Js).and_then(|response| {
-                    serde_wasm_bindgen::from_value(response)
-                        .map_err(SlackError::SerdeWasmBindgen)
-                        .and_then(UserResponse::validate_response)
-                })
+                result
+                    .map_err(SlackError::Js)
+                    .and_then(convert_result_string_to_object)
+                    .and_then(|response| {
+                        serde_wasm_bindgen::from_value(response)
+                            .map_err(SlackError::SerdeWasmBindgen)
+                            .and_then(UserResponse::validate_response)
+                    })
             })
             .collect(),
         Err(err) => Err(err),
@@ -64,7 +68,7 @@ pub async fn get_users_from_api(
 
     users.map(|user_responses| {
         user_ids
-            .into_iter()
+            .iter()
             .map(String::to_string)
             .zip(
                 user_responses

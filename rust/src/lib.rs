@@ -16,16 +16,10 @@ use derive_builder::Builder;
 use do_notation::m;
 use errors::SlackError;
 use js_sys::{JsString, Promise, JSON};
-use messages::{Message, MessageResponse};
+use messages::Message;
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::Serializer;
-use slack_http_client::{get_api_base, SlackHttpClient, SlackHttpClientConfig};
 use slack_url::SlackUrl;
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-    str::FromStr,
-};
+use std::{collections::HashMap, path::Path, str::FromStr};
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
 
@@ -75,13 +69,13 @@ impl MessageAndThreadToSave {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Builder)]
 struct MessageToSave {
-    r#type: String,
-    user: User,
-    text: String,
-    thread_ts: String,
-    reply_count: u16,
-    team: String,
-    ts: String,
+    r#type: Option<String>,
+    user: Option<User>,
+    text: Option<String>,
+    thread_ts: Option<String>,
+    reply_count: Option<u16>,
+    team: Option<String>,
+    ts: Option<String>,
 }
 
 impl MessageToSave {
@@ -89,34 +83,19 @@ impl MessageToSave {
         message: &Message,
         users: &HashMap<String, User>,
     ) -> Result<MessageToSave, SlackError> {
-        match users.get(&message.user) {
+        match users.get(message.user.as_ref().unwrap()) {
             Some(user) => Ok(MessageToSaveBuilder::default()
-                .r#type(message.r#type.to_string())
-                .user(user.clone())
-                .text(message.text.to_string())
-                .thread_ts(message.thread_ts.to_string())
-                .reply_count(message.reply_count.to_owned())
-                .team(message.team.to_string())
-                .ts(message.ts.to_string())
+                .r#type(message.r#type.clone())
+                .user(Some(user.to_owned()))
+                .text(message.text.clone())
+                .thread_ts(message.thread_ts.clone())
+                .reply_count(message.reply_count)
+                .team(message.team.clone())
+                .ts(message.ts.clone())
                 .build()
                 .unwrap()),
             None => Err(SlackError::MissingUsers),
         }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RequestUrlParam {
-    url: String,
-    method: String,
-    headers: HashMap<String, String>,
-    body: String,
-}
-
-impl RequestUrlParam {
-    fn with_url(mut self, url: String) -> Self {
-        self.url = url;
-        self
     }
 }
 
@@ -199,10 +178,12 @@ pub fn init_wasm(log_level: Option<String>) {
 ///
 /// Panics:
 /// The function is designed to catch all errors and display an alert in Obsidian
-/// with the error.
+/// with the error. If there is a panic, then there is a programming bug that needs
+/// to be addressed
 #[wasm_bindgen]
 pub async fn get_slack_message(api_token: String, cookie: String, url: String, vault: Vault) {
-    #[derive(Clone, Builder)]
+    #[derive(Clone, Builder, Default)]
+    #[builder(default)]
     struct Buffer {
         message_and_thread: Option<MessageAndThreadToSave>,
         slack_url: Option<SlackUrl>,
@@ -252,18 +233,14 @@ pub async fn get_slack_message(api_token: String, cookie: String, url: String, v
     }
 }
 
-fn make_request(params: RequestUrlParam) -> Promise {
-    let serializer = Serializer::json_compatible();
-    request(params.serialize(&serializer).unwrap())
-}
-
 async fn get_results_from_api(
     api_token: String,
     cookie: String,
     url: String,
 ) -> Result<(MessageAndThreadToSave, SlackUrl), errors::SlackError> {
     // separate calls for intermediate results due to `and_then` closures not allowing await
-    #[derive(Clone, Builder)]
+    #[derive(Clone, Builder, Default)]
+    #[builder(default)]
     struct Buffer {
         message_and_thread: Option<MessageAndThread>,
         slack_url: Option<SlackUrl>,
@@ -273,7 +250,7 @@ async fn get_results_from_api(
     let buffer = messages::get_messages_from_api(&api_token, &cookie, &url)
         .await
         .map(|(message_and_thread, slack_url)| {
-            BufferBuilder::default()
+            BufferBuilder::create_empty()
                 .message_and_thread(Some(message_and_thread))
                 .slack_url(Some(slack_url))
                 .build()
