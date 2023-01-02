@@ -134,8 +134,8 @@ pub async fn get_messages_from_api(
                     MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
 
                 MessageAndThread {
-                    message: response,
-                    thread: copy,
+                    message: copy,
+                    thread: response,
                 }
             })
             .map(|message_and_thread| (message_and_thread, slack_url))
