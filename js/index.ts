@@ -58,14 +58,21 @@ class GetSlackMessageModal extends Modal {
 		const { contentEl, titleEl } = this;
 		titleEl.setText('Get Slack Message by URL');
 		contentEl.setText('Paste URL below and submit')
-		const div = contentEl.createDiv();
 
-		const text = div
+		const div0 = contentEl.createDiv();
+		div0.createEl("br")
+
+		const div1 = contentEl.createDiv();
+
+		const text = div1
 			.createEl("input", {
 			});
 
-		div.createEl("button",
+		const div2 = contentEl.createDiv();
+
+		div2.createEl("button",
 			{
+				cls: ["mod-cta", "obsidian-git-center-button"],
 				text: "Submit",
 			})
 			.addEventListener("click", async () => {
@@ -79,11 +86,11 @@ class GetSlackMessageModal extends Modal {
 		const { contentEl } = this;
 		var apiToken = this.plugin.localStorage.getApiToken();
 		var cookie = this.plugin.localStorage.getCookie();
-		if (apiToken === null || cookie === null) {
-			alert("apiToken or cookie was null, aborting operation")
+		if (apiToken && cookie) {
+			this.url ? await this.get_slack_message(apiToken, cookie, this.url, this.app.vault) : null;
 		}
 		else {
-			await this.get_slack_message(apiToken, cookie, this.url, this.app.vault);
+			alert("apiToken or cookie or url was null, undefined, or empty. Aborting operation")
 		}
 		contentEl.empty();
 	}
