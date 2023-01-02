@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{borrow::Borrow, collections::HashMap, fmt::Debug, str::FromStr, sync::mpsc::channel};
 use url::Url;
 
 use crate::{
@@ -9,6 +9,22 @@ use crate::{
 
 pub fn get_api_base() -> Url {
     Url::from_str("https://slack.com/api/").unwrap()
+}
+
+pub trait SlackResponseValidator {
+    fn ok(&self) -> Option<bool>;
+
+    fn validate_response(self) -> Result<Self, SlackError>
+    where
+        Self: Sized,
+        Self: std::fmt::Debug,
+    {
+        if self.ok().unwrap() {
+            Ok(self)
+        } else {
+            Err(SlackError::ResponseNotOk(format!("{:#?}", self)))
+        }
+    }
 }
 
 pub struct SlackHttpClientConfig {
@@ -74,28 +90,29 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         }
     }
 
-    fn build_request_uri(&self, endpoint: &str, channel_id: &str, ts: &str) -> Url {
+    fn build_request_uri<I, K, V>(&self, endpoint: &str, iter: I) -> Url
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
         let mut request_url = self.config.api_base.clone();
 
         request_url.path_segments_mut().unwrap().push(endpoint);
 
         request_url
             .query_pairs_mut()
-            .append_pair(
-                SlackApiQueryParams::channel.to_string().as_str(),
-                channel_id,
-            )
-            .append_pair(SlackApiQueryParams::ts.to_string().as_str(), ts)
-            .append_pair(SlackApiQueryParams::pretty.to_string().as_str(), "1")
-            .append_pair(SlackApiQueryParams::inclusive.to_string().as_str(), "true");
+            .extend_pairs(iter)
+            .append_pair(SlackApiQueryParams::pretty.to_string().as_str(), "1");
 
         request_url
     }
 
-    fn build_base_request(&self) -> RequestUrlParam {
+    fn build_base_request(&self, method: String) -> RequestUrlParam {
         RequestUrlParam {
             url: "".to_string(),
-            method: "POST".to_string(),
+            method,
             headers: HashMap::from([
                 (
                     "content-type".to_string(),
@@ -105,20 +122,6 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
             ]),
             body: format!("token={}", self.config.token),
         }
-    }
-
-    pub fn get_conversation_replies_using_thread_ts(
-        &self,
-        slack_url: &SlackUrl,
-    ) -> Option<ClientReturnType> {
-        slack_url
-            .thread_ts
-            .as_ref()
-            .map(|ts| self.get_conversation_replies(&slack_url.channel_id, ts))
-    }
-
-    pub fn get_conversation_replies_using_ts(&self, slack_url: &SlackUrl) -> ClientReturnType {
-        self.get_conversation_replies(&slack_url.channel_id, &slack_url.ts)
     }
 
     pub fn get_conversation_replies(&self, channel_id: &str, timestamp: &str) -> ClientReturnType {
@@ -131,10 +134,35 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         );
 
         log::info!("{}|build request url", &log_prefix);
-        let request_url = self.build_request_uri("conversations.replies", channel_id, timestamp);
+        let request_url = self.build_request_uri(
+            "conversations.replies",
+            vec![
+                ("channel", channel_id),
+                ("ts", timestamp),
+                ("inclusive", "true"),
+            ],
+        );
 
         log::info!("{}|build request object", &log_prefix);
-        let the_request = self.build_base_request().with_url(request_url.to_string());
+        let the_request = self
+            .build_base_request("POST".to_string())
+            .with_url(request_url.to_string());
+
+        log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);
+        (self.request_func)(the_request)
+    }
+
+    pub fn get_user_info(&self, user_id: &str) -> ClientReturnType {
+        let log_prefix = "rust|get_user_info";
+        log::info!("{}|user_id={}", &log_prefix, user_id);
+
+        log::info!("{}|build request url", &log_prefix);
+        let request_url = self.build_request_uri("user.info", vec![("user_id", user_id)]);
+
+        log::info!("{}|build request object", &log_prefix);
+        let the_request = self
+            .build_base_request("GET".to_string())
+            .with_url(request_url.to_string());
 
         log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);
         (self.request_func)(the_request)

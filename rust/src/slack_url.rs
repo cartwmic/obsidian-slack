@@ -7,7 +7,7 @@ use crate::errors::{SlackError, SlackUrlError};
 
 const THREAD_TS_KEY: &str = "thread_ts";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SlackUrl {
     pub channel_id: String,
     pub ts: String,

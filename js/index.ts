@@ -129,8 +129,8 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
 export function combine_result(timestamp_result: any, thread_timestamp_result: any): any {
 	try {
 		return {
-			"timestamp": JSON.parse(timestamp_result),
-			"thread_timestamp": JSON.parse(thread_timestamp_result)
+			"timestamp": timestamp_result,
+			"thread_timestamp": thread_timestamp_result
 		}
 	} catch (error) {
 		console.log(timestamp_result);

@@ -72,9 +72,12 @@ pub enum SlackError {
     SlackUrl(SlackUrlError),
     SlackHttpClient(SlackHttpClientError),
     Js(JsValue),
+    JsValueNotObject(String),
     ResponseNotOk(String),
     ResponseOkNotABoolean(String),
     ResponseNotAnObject(String),
     ResponseMissingOkField(String),
     EmptyResult(String),
+    SerdeWasmBindgen(serde_wasm_bindgen::Error),
+    MissingUsers,
 }

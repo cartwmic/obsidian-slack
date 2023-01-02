@@ -6,22 +6,104 @@
 //! corresponding 'xoxd' cookie.
 
 mod errors;
+mod messages;
 mod slack_http_client;
 mod slack_url;
+mod users;
 mod utils;
 
+use derive_builder::Builder;
 use do_notation::m;
 use errors::SlackError;
 use js_sys::{JsString, Promise, JSON};
+use messages::{Message, MessageResponse};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::Serializer;
 use slack_http_client::{get_api_base, SlackHttpClient, SlackHttpClientConfig};
 use slack_url::SlackUrl;
-use std::{collections::HashMap, path::Path, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    str::FromStr,
+};
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
 
+use crate::{messages::MessageAndThread, users::User};
+
 static ATTACHMENT_FOLDER_CONFIG_KEY: &str = "attachmentFolderPath";
+
+#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
+struct MessageAndThreadToSave {
+    message: Vec<MessageToSave>,
+    thread: Vec<MessageToSave>,
+}
+
+impl MessageAndThreadToSave {
+    fn from_message_and_thread_and_users(
+        message_and_thread: &MessageAndThread,
+        users: &HashMap<String, User>,
+    ) -> Result<MessageAndThreadToSave, SlackError> {
+        let message_messages = message_and_thread
+            .message
+            .messages
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|message| MessageToSave::from_message_and_user_map(message, users))
+            .collect::<Result<Vec<MessageToSave>, SlackError>>();
+
+        message_messages.and_then(|message_messages| {
+            let thread_messages = message_and_thread
+                .thread
+                .messages
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|message| MessageToSave::from_message_and_user_map(message, users))
+                .collect::<Result<Vec<MessageToSave>, SlackError>>();
+            thread_messages.map(|thread_messages| {
+                MessageAndThreadToSaveBuilder::default()
+                    .thread(thread_messages)
+                    .message(message_messages)
+                    .build()
+                    .unwrap()
+            })
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
+struct MessageToSave {
+    r#type: String,
+    user: User,
+    text: String,
+    thread_ts: String,
+    reply_count: u16,
+    team: String,
+    ts: String,
+}
+
+impl MessageToSave {
+    fn from_message_and_user_map(
+        message: &Message,
+        users: &HashMap<String, User>,
+    ) -> Result<MessageToSave, SlackError> {
+        match users.get(&message.user) {
+            Some(user) => Ok(MessageToSaveBuilder::default()
+                .r#type(message.r#type.to_string())
+                .user(user.clone())
+                .text(message.text.to_string())
+                .thread_ts(message.thread_ts.to_string())
+                .reply_count(message.reply_count.to_owned())
+                .team(message.team.to_string())
+                .ts(message.ts.to_string())
+                .build()
+                .unwrap()),
+            None => Err(SlackError::MissingUsers),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RequestUrlParam {
@@ -120,14 +202,46 @@ pub fn init_wasm(log_level: Option<String>) {
 /// with the error.
 #[wasm_bindgen]
 pub async fn get_slack_message(api_token: String, cookie: String, url: String, vault: Vault) {
+    #[derive(Clone, Builder)]
+    struct Buffer {
+        message_and_thread: Option<MessageAndThreadToSave>,
+        slack_url: Option<SlackUrl>,
+        file_name: Option<String>,
+    }
+
     // separate calls for intermediate results due to `and_then` closures not allowing await
-    let results_from_api = get_results_from_api(api_token, cookie, url).await;
+    let buffer = get_results_from_api(api_token, cookie, url).await.map(
+        |(message_and_thread, slack_url)| {
+            BufferBuilder::default()
+                .message_and_thread(Some(message_and_thread))
+                .slack_url(Some(slack_url))
+                .build()
+                .unwrap()
+        },
+    );
 
-    let file_creation_result = create_file_from_result(results_from_api, vault).await;
+    let buffer = match buffer {
+        Ok(mut buffer) => create_file_from_result(
+            buffer.message_and_thread.as_ref().unwrap(),
+            buffer.slack_url.as_ref().unwrap(),
+            vault,
+        )
+        .await
+        .map(|file_name| {
+            buffer.file_name = Some(file_name);
+            buffer
+        }),
+        Err(err) => Err(err),
+    };
 
-    let clipboard_save_result = save_to_clipboard(file_creation_result).await;
+    let buffer = match buffer {
+        Ok(buffer) => save_to_clipboard(buffer.file_name.as_ref().unwrap())
+            .await
+            .map(|_| buffer),
+        Err(err) => Err(err),
+    };
 
-    match clipboard_save_result {
+    match buffer {
         Ok(_) => {
             Notice::new_with_timeout("Successfully downloaded slack message and saved to attachment file. Attachment file name saved to clipboard", 5000);
         }
@@ -143,84 +257,65 @@ fn make_request(params: RequestUrlParam) -> Promise {
     request(params.serialize(&serializer).unwrap())
 }
 
-fn validate_result(val: JsValue) -> Result<JsValue, SlackError> {
-    // results from the `request` function of obsidian return strings
-    m! {
-        let key = "ok";
-        str_val <- val
-                   .as_string()
-                   .map_or(Err(errors::SlackError::EmptyResult(format!("{:#?}", val))), Ok);
-        obj_val <- JSON::parse(&str_val)
-                   .map_err(|err| errors::SlackError::ResponseNotAnObject(format!("{:#?} | {:#?}", err, val)));
-        _ <- js_sys::Reflect::has(&obj_val, &JsValue::from_str(key))
-             .map_err(|err| errors::SlackError::ResponseMissingOkField(format!("{:#?} | {:#?}", err, obj_val)))
-             .and_then(|has_ok| {
-                if has_ok {Ok(has_ok)} else {Err(errors::SlackError::ResponseMissingOkField("".to_string()))}
-             });
-        is_ok <- js_sys::Reflect::get(&obj_val, &JsValue::from_str(key))
-                 .map_err(|err| errors::SlackError::ResponseMissingOkField(format!("{:#?} | {:#?}", err, obj_val)));
-        is_ok <- is_ok
-                 .as_bool()
-                 .map_or(Err(errors::SlackError::ResponseOkNotABoolean(format!("{:#?}", obj_val))), Ok);
-        return (is_ok, val);
-    }.and_then(|(is_ok, val)| {
-        if is_ok {
-            Ok(val)
-        } else {
-            Err(SlackError::ResponseNotOk(format!("{:#?}", val)))
-        }
-    })
-}
-
 async fn get_results_from_api(
     api_token: String,
     cookie: String,
     url: String,
-) -> Result<(JsValue, SlackUrl), errors::SlackError> {
-    match m! {
-        config <- SlackHttpClientConfig::new(get_api_base(), api_token, cookie);
-        let client = SlackHttpClient::<Promise>::new(config, make_request);
-        slack_url <- SlackUrl::new(&url);
-        let ts = wasm_bindgen_futures::JsFuture::from(
-            client.get_conversation_replies_using_ts(&slack_url),
-        );
-        let thread_ts = client.get_conversation_replies_using_thread_ts(&slack_url);
-        return (client, slack_url, ts, thread_ts);
-    } {
-        Ok((_, url, ts, thread_ts)) => {
-            let ts = ts
-                .await
-                .map_err(errors::SlackError::Js)
-                .and_then(validate_result);
-            let thread_ts = match thread_ts {
-                Some(promise) => wasm_bindgen_futures::JsFuture::from(promise)
-                    .await
-                    .map_err(errors::SlackError::Js)
-                    .and_then(validate_result),
-                None => Ok(JsValue::NULL),
-            };
-            m! {
-                ts <- ts;
-                thread_ts <- thread_ts;
-                return (combine_result(&ts, &thread_ts), url);
-            }
-        }
-        Err(err) => Err(err),
+) -> Result<(MessageAndThreadToSave, SlackUrl), errors::SlackError> {
+    // separate calls for intermediate results due to `and_then` closures not allowing await
+    #[derive(Clone, Builder)]
+    struct Buffer {
+        message_and_thread: Option<MessageAndThread>,
+        slack_url: Option<SlackUrl>,
+        users: Option<HashMap<String, User>>,
     }
+
+    let buffer = messages::get_messages_from_api(&api_token, &cookie, &url)
+        .await
+        .map(|(message_and_thread, slack_url)| {
+            BufferBuilder::default()
+                .message_and_thread(Some(message_and_thread))
+                .slack_url(Some(slack_url))
+                .build()
+                .unwrap()
+        });
+
+    let buffer = match buffer {
+        Ok(mut buffer) => match buffer.message_and_thread.as_ref().unwrap().collect_users() {
+            Ok(user_ids) => users::get_users_from_api(&user_ids, &api_token, &cookie)
+                .await
+                .map(|users| {
+                    buffer.users = Some(users);
+                    buffer
+                }),
+            Err(err) => Err(err),
+        },
+        Err(err) => Err(err),
+    };
+
+    buffer.and_then(|buffer| {
+        MessageAndThreadToSave::from_message_and_thread_and_users(
+            buffer.message_and_thread.as_ref().unwrap(),
+            buffer.users.as_ref().unwrap(),
+        )
+        .map(|message_and_thread| (message_and_thread, buffer.slack_url.unwrap()))
+    })
 }
 
 async fn create_file_from_result(
-    results_from_api: Result<(JsValue, SlackUrl), errors::SlackError>,
+    message_and_thread: &MessageAndThreadToSave,
+    slack_url: &SlackUrl,
     vault: Vault,
 ) -> Result<String, errors::SlackError> {
     match m! {
-        result <- results_from_api;
-        let (result, slack_url) = result;
         let attachments_folder = vault.getConfig(ATTACHMENT_FOLDER_CONFIG_KEY);
         let file_name = vec![
-            slack_url.channel_id,
-            slack_url.ts,
-            slack_url.thread_ts.unwrap_or_default(),
+            slack_url.channel_id.to_string(),
+            slack_url
+                .thread_ts
+                .as_ref()
+                .unwrap_or(&slack_url.ts)
+                .to_string(),
         ]
         .join("-")
             + ".json";
@@ -229,8 +324,12 @@ async fn create_file_from_result(
             .to_str()
             .unwrap()
             .to_string();
-        json_str <- JSON::stringify_with_replacer_and_space(&result, &JsValue::NULL, &JsValue::from_f64(2.0))
-            .map_err(errors::SlackError::Js);
+        json_str <- JSON::stringify_with_replacer_and_space(
+            &serde_wasm_bindgen::to_value(&message_and_thread).unwrap(),
+            &JsValue::NULL,
+            &JsValue::from_f64(2.0
+        ))
+        .map_err(errors::SlackError::Js);
         return (json_str, file_name, new_file_path, vault);
     } {
         Ok((json_str, file_name, new_file_path, vault)) => {
@@ -243,13 +342,8 @@ async fn create_file_from_result(
     }
 }
 
-async fn save_to_clipboard(
-    file_creation_result: Result<String, errors::SlackError>,
-) -> Result<JsValue, errors::SlackError> {
-    match file_creation_result {
-        Ok(file_name) => wasm_bindgen_futures::JsFuture::from(writeText(&file_name))
-            .await
-            .map_err(errors::SlackError::Js),
-        Err(err) => Err(err),
-    }
+async fn save_to_clipboard(file_name: &str) -> Result<JsValue, errors::SlackError> {
+    wasm_bindgen_futures::JsFuture::from(writeText(file_name))
+        .await
+        .map_err(errors::SlackError::Js)
 }
