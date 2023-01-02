@@ -3,10 +3,12 @@ use std::str::FromStr;
 use do_notation::m;
 use tuple_conv::RepeatedTuple;
 
-use crate::errors::{SlackError, SlackUrlError};
+use crate::{
+    errors::{SlackError, SlackUrlError},
+    slack_http_client::SlackApiQueryParams,
+};
 
-const THREAD_TS_KEY: &str = "thread_ts";
-
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct SlackUrl {
     pub channel_id: String,
@@ -84,7 +86,7 @@ impl SlackUrl {
 
     fn parse_thread_ts(url: &url::Url) -> Option<String> {
         url.query_pairs()
-            .find(|(key, _)| *key == THREAD_TS_KEY)
+            .find(|(key, _)| *key == SlackApiQueryParams::thread_ts.to_string())
             .map(|(_, value)| value.to_string())
     }
 }

@@ -70,15 +70,16 @@ impl SlackHttpClientConfig {
                 token: the_token.to_string(),
                 cookie: the_cookie.to_string(),
             }),
-            (Err(a), Err(b)) => Err(a),
+            (Err(a), Err(_)) => Err(a),
             (Err(a), Ok(_)) => Err(a),
             (Ok(_), Err(b)) => Err(b),
         }
     }
 }
 
+#[allow(non_camel_case_types)]
 #[derive(strum_macros::Display)]
-enum SlackApiQueryParams {
+pub enum SlackApiQueryParams {
     ts,
     thread_ts,
     channel,
@@ -168,9 +169,9 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         let request_url = self.build_request_uri(
             "conversations.replies",
             vec![
-                ("channel", channel_id),
-                ("ts", timestamp),
-                ("inclusive", "true"),
+                (SlackApiQueryParams::channel.to_string(), channel_id),
+                (SlackApiQueryParams::ts.to_string(), timestamp),
+                (SlackApiQueryParams::inclusive.to_string(), "true"),
             ],
         );
 
