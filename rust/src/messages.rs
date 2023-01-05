@@ -106,40 +106,31 @@ impl SlackResponseValidator for MessageResponse {
     }
 }
 
-pub async fn get_messages_from_api(
-    api_token: &str,
-    cookie: &str,
-    url: &str,
-) -> Result<(MessageAndThread, SlackUrl), SlackError> {
-    let client =
-        SlackHttpClientConfig::new(get_api_base(), api_token.to_string(), cookie.to_string())
-            .map(|config| SlackHttpClient::<Promise>::new(config, make_request));
-    let client_and_url = client.and_then(|client| SlackUrl::new(url).map(|url| (client, url)));
-    match client_and_url {
-        Ok((client, slack_url)) => {
-            let thread_ts = match slack_url.thread_ts.clone() {
-                Some(thread_ts) => thread_ts,
-                None => slack_url.clone().ts,
-            };
-            wasm_bindgen_futures::JsFuture::from(
-                client.get_conversation_replies(&slack_url.channel_id, &thread_ts),
-            )
-            .await
-            .map_err(errors::SlackError::Js)
-            .and_then(convert_result_string_to_object)
-            .and_then(MessageResponse::defined_from_js_object)
-            .and_then(MessageResponse::validate_response)
-            .map(|response| {
-                let copy =
-                    MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
+pub async fn get_messages_from_api<T>(
+    client: &SlackHttpClient<T>,
+    slack_url: &SlackUrl,
+) -> Result<MessageAndThread, SlackError>
+where
+    wasm_bindgen_futures::JsFuture: std::convert::From<T>,
+{
+    let thread_ts = match slack_url.thread_ts.clone() {
+        Some(thread_ts) => thread_ts,
+        None => slack_url.clone().ts,
+    };
+    wasm_bindgen_futures::JsFuture::from(
+        client.get_conversation_replies(&slack_url.channel_id, &thread_ts),
+    )
+    .await
+    .map_err(errors::SlackError::Js)
+    .and_then(convert_result_string_to_object)
+    .and_then(MessageResponse::defined_from_js_object)
+    .and_then(MessageResponse::validate_response)
+    .map(|response| {
+        let copy = MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
 
-                MessageAndThread {
-                    message: copy,
-                    thread: response,
-                }
-            })
-            .map(|message_and_thread| (message_and_thread, slack_url))
+        MessageAndThread {
+            message: copy,
+            thread: response,
         }
-        Err(err) => Err(err),
-    }
+    })
 }

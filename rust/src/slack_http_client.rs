@@ -1,3 +1,4 @@
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, collections::HashMap, str::FromStr};
 use url::Url;
@@ -40,10 +41,21 @@ pub trait SlackResponseValidator {
     }
 }
 
+#[derive(Builder, Debug, Clone)]
 pub struct SlackHttpClientConfig {
     api_base: url::Url,
     token: String,
     cookie: String,
+    feature_flags: SlackHttpClientConfigFeatureFlags,
+}
+
+#[derive(Debug, Serialize, Deserialize, Builder, Clone)]
+pub struct SlackHttpClientConfigFeatureFlags {
+    get_users: bool,
+    get_reactions: bool,
+    get_channel_info: bool,
+    get_attachments: bool,
+    get_team_info: bool,
 }
 
 impl SlackHttpClientConfig {
@@ -51,6 +63,7 @@ impl SlackHttpClientConfig {
         api_base: Url,
         token: String,
         cookie: String,
+        feature_flags: SlackHttpClientConfigFeatureFlags,
     ) -> Result<SlackHttpClientConfig, SlackError> {
         let log_prefix = "rust|SlackHttpClientConfig|new";
         log::info!(
@@ -70,6 +83,7 @@ impl SlackHttpClientConfig {
                 api_base,
                 token: the_token.to_string(),
                 cookie: the_cookie.to_string(),
+                feature_flags,
             }),
             (Err(a), Err(_)) => Err(a),
             (Err(a), Ok(_)) => Err(a),
@@ -88,6 +102,7 @@ pub enum SlackApiQueryParams {
     pretty,
 }
 
+#[derive(Builder, Debug, Clone)]
 pub struct SlackHttpClient<ClientReturnType> {
     config: SlackHttpClientConfig,
     request_func: fn(RequestUrlParam) -> ClientReturnType,

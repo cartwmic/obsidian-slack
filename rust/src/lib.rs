@@ -18,13 +18,18 @@ use errors::SlackError;
 use js_sys::{JsString, Promise, JSON};
 use messages::Message;
 use serde::{Deserialize, Serialize};
+use slack_http_client::SlackHttpClientConfigFeatureFlags;
 use slack_url::SlackUrl;
-use std::fmt::Write;
 use std::{collections::HashMap, path::Path, str::FromStr};
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
 
-use crate::{messages::MessageAndThread, users::User};
+use crate::{
+    messages::MessageAndThread,
+    slack_http_client::{get_api_base, SlackHttpClient, SlackHttpClientConfig},
+    users::User,
+    utils::make_request,
+};
 
 static ATTACHMENT_FOLDER_CONFIG_KEY: &str = "attachmentFolderPath";
 
@@ -182,7 +187,13 @@ pub fn init_wasm(log_level: Option<String>) {
 /// with the error. If there is a panic, then there is a programming bug that needs
 /// to be addressed
 #[wasm_bindgen]
-pub async fn get_slack_message(api_token: String, cookie: String, url: String, vault: Vault) {
+pub async fn get_slack_message(
+    api_token: String,
+    cookie: String,
+    url: String,
+    vault: Vault,
+    feature_flags: JsValue,
+) {
     #[derive(Clone, Builder, Default)]
     #[builder(default)]
     struct Buffer {
@@ -192,15 +203,15 @@ pub async fn get_slack_message(api_token: String, cookie: String, url: String, v
     }
 
     // separate calls for intermediate results due to `and_then` closures not allowing await
-    let buffer = get_results_from_api(api_token, cookie, url).await.map(
-        |(message_and_thread, slack_url)| {
+    let buffer = get_results_from_api(api_token, cookie, url, feature_flags)
+        .await
+        .map(|(message_and_thread, slack_url)| {
             BufferBuilder::default()
                 .message_and_thread(Some(message_and_thread))
                 .slack_url(Some(slack_url))
                 .build()
                 .unwrap()
-        },
-    );
+        });
 
     let buffer = match buffer {
         Ok(mut buffer) => create_file_from_result(
@@ -239,6 +250,7 @@ async fn get_results_from_api(
     api_token: String,
     cookie: String,
     url: String,
+    feature_flags: JsValue,
 ) -> Result<(MessageAndThreadToSave, SlackUrl), errors::SlackError> {
     // separate calls for intermediate results due to `and_then` closures not allowing await
     #[derive(Clone, Builder, Default)]
@@ -247,21 +259,42 @@ async fn get_results_from_api(
         message_and_thread: Option<MessageAndThread>,
         slack_url: Option<SlackUrl>,
         users: Option<HashMap<String, User>>,
+        client: Option<SlackHttpClient<Promise>>,
     }
 
-    let buffer = messages::get_messages_from_api(&api_token, &cookie, &url)
-        .await
-        .map(|(message_and_thread, slack_url)| {
-            BufferBuilder::create_empty()
-                .message_and_thread(Some(message_and_thread))
+    let buffer = m! {
+        feature_flags <- serde_wasm_bindgen::from_value(feature_flags).map_err(errors::SlackError::SerdeWasmBindgen);
+        config <- SlackHttpClientConfig::new(
+                get_api_base(),
+                api_token.to_string(),
+                cookie.to_string(),
+                feature_flags,
+            );
+        slack_url <- SlackUrl::new(&url);
+        let client = SlackHttpClient::<Promise>::new(config, make_request);
+        return BufferBuilder::create_empty()
+                .client(Some(client))
                 .slack_url(Some(slack_url))
                 .build()
-                .unwrap()
-        });
+                .unwrap();
+    };
+
+    let buffer = match buffer {
+        Ok(mut buffer) => messages::get_messages_from_api(
+            buffer.client.as_ref().unwrap(),
+            buffer.slack_url.as_ref().unwrap(),
+        )
+        .await
+        .map(|message_and_thread| {
+            buffer.message_and_thread = Some(message_and_thread);
+            buffer
+        }),
+        Err(err) => Err(err),
+    };
 
     let buffer = match buffer {
         Ok(mut buffer) => match buffer.message_and_thread.as_ref().unwrap().collect_users() {
-            Ok(user_ids) => users::get_users_from_api(&user_ids, &api_token, &cookie)
+            Ok(user_ids) => users::get_users_from_api(&user_ids, buffer.client.as_ref().unwrap())
                 .await
                 .map(|users| {
                     buffer.users = Some(users);
