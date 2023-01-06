@@ -113,11 +113,6 @@ extern "C" {
     fn writeText(data: &str) -> Promise;
 }
 
-#[wasm_bindgen(module = "index")]
-extern "C" {
-    fn combine_result(timestamp_result: &JsValue, threaded_timestamp_result: &JsValue) -> JsValue;
-}
-
 #[wasm_bindgen(module = "obsidian")]
 extern "C" {
     fn request(request: JsValue) -> Promise;
@@ -264,6 +259,7 @@ async fn get_results_from_api(
 
     let buffer = m! {
         feature_flags <- serde_wasm_bindgen::from_value(feature_flags).map_err(errors::SlackError::SerdeWasmBindgen);
+        let _ = log::info!("{:#?}", feature_flags);
         config <- SlackHttpClientConfig::new(
                 get_api_base(),
                 api_token.to_string(),

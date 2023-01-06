@@ -6,11 +6,21 @@ import { LocalStorageSettings } from "localStorageSettings";
 interface ObsidianSlackPluginSettings {
 	apiToken: string;
 	cookie: string;
+	get_users: boolean;
+	get_reactions: boolean;
+	get_channel_info: boolean;
+	get_attachments: boolean;
+	get_team_info: boolean;
 }
 
 const DEFAULT_SETTINGS: ObsidianSlackPluginSettings = {
 	apiToken: 'default',
-	cookie: 'default'
+	cookie: 'default',
+	get_users: false,
+	get_reactions: false,
+	get_channel_info: false,
+	get_attachments: false,
+	get_team_info: false
 }
 
 export default class ObsidianSlackPlugin extends Plugin {
@@ -46,9 +56,9 @@ export default class ObsidianSlackPlugin extends Plugin {
 class GetSlackMessageModal extends Modal {
 	url: string;
 	plugin: ObsidianSlackPlugin;
-	get_slack_message: (apiToken: string, cookie: string, url: string, vault: Vault) => any;
+	get_slack_message: (apiToken: string, cookie: string, url: string, vault: Vault, feature_flags: any) => any;
 
-	constructor(app: App, plugin: ObsidianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string, vault: Vault) => any) {
+	constructor(app: App, plugin: ObsidianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string, vault: Vault, feature_flags: any) => any) {
 		super(app);
 		this.get_slack_message = get_slack_message;
 		this.plugin = plugin;
@@ -87,7 +97,16 @@ class GetSlackMessageModal extends Modal {
 		var apiToken = this.plugin.localStorage.getApiToken();
 		var cookie = this.plugin.localStorage.getCookie();
 		if (apiToken && cookie) {
-			this.url ? await this.get_slack_message(apiToken, cookie, this.url, this.app.vault) : null;
+			// do nothing on empty url
+			if (this.url) {
+				await this.get_slack_message(apiToken, cookie, this.url, this.app.vault, {
+					"get_users": this.plugin.settings.get_users,
+					"get_reactions": this.plugin.settings.get_reactions,
+					"get_channel_info": this.plugin.settings.get_channel_info,
+					"get_attachments": this.plugin.settings.get_attachments,
+					"get_team_info": this.plugin.settings.get_team_info,
+				});
+			}
 		}
 		else {
 			alert("apiToken or cookie or url was null, undefined, or empty. Aborting operation")
@@ -127,20 +146,57 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
 			.addText(text => text
 				.setPlaceholder('Enter your cookie')
 				.onChange(async (value) => {
-					console.log('onChange:cookie: ' + value);
 					this.plugin.localStorage.setCookie(value);
 				}));
-	}
-}
 
-export function combine_result(timestamp_result: any, thread_timestamp_result: any): any {
-	try {
-		return {
-			"timestamp": timestamp_result,
-			"thread_timestamp": thread_timestamp_result
-		}
-	} catch (error) {
-		console.log(timestamp_result);
-		console.log(thread_timestamp_result)
+		new Setting(containerEl)
+			.setName('Get User Info')
+			.setDesc('Toggle if Obsidian Slack should download user info along with messages')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.get_users)
+				.onChange(async (value) => {
+					this.plugin.settings.get_users = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Get Reactions')
+			.setDesc('Toggle if Obsidian Slack should download user reactions along with messages')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.get_reactions)
+				.onChange(async (value) => {
+					this.plugin.settings.get_reactions = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Get Channel Info')
+			.setDesc('Toggle if Obsidian Slack should download channel info along with messages')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.get_channel_info)
+				.onChange(async (value) => {
+					this.plugin.settings.get_channel_info = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Get Attachments')
+			.setDesc('Toggle if Obsidian Slack should download attachments along with messages')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.get_attachments)
+				.onChange(async (value) => {
+					this.plugin.settings.get_attachments = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Get Team Info')
+			.setDesc('Toggle if Obsidian Slack should download team info along with messages')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.get_team_info)
+				.onChange(async (value) => {
+					this.plugin.settings.get_team_info = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }
