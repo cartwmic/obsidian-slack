@@ -28,7 +28,7 @@ use crate::{
     messages::MessageAndThread,
     slack_http_client::{get_api_base, SlackHttpClient, SlackHttpClientConfig},
     users::User,
-    utils::make_request,
+    utils::{create_file_name, make_request},
 };
 
 static ATTACHMENT_FOLDER_CONFIG_KEY: &str = "attachmentFolderPath";
@@ -266,17 +266,4 @@ async fn get_results_from_api(
         )
         .map(|message_and_thread| (message_and_thread, buffer.slack_url.unwrap()))
     })
-}
-
-fn create_file_name(slack_url: &SlackUrl) -> String {
-    vec![
-        slack_url.channel_id.to_string(),
-        slack_url
-            .thread_ts
-            .as_ref()
-            .unwrap_or(&slack_url.ts)
-            .to_string(),
-    ]
-    .join("-")
-        + ".json"
 }

@@ -4,7 +4,7 @@ use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::JsValue;
 
-use crate::{errors::SlackError, request, slack_http_client::RequestUrlParam};
+use crate::{errors::SlackError, request, slack_http_client::RequestUrlParam, slack_url::SlackUrl};
 
 pub fn set_panic_hook() {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -32,4 +32,17 @@ pub fn convert_result_string_to_object(val: JsValue) -> Result<JsValue, SlackErr
 pub fn make_request(params: RequestUrlParam) -> Promise {
     let serializer = Serializer::json_compatible();
     request(params.serialize(&serializer).unwrap())
+}
+
+pub fn create_file_name(slack_url: &SlackUrl) -> String {
+    vec![
+        slack_url.channel_id.to_string(),
+        slack_url
+            .thread_ts
+            .as_ref()
+            .unwrap_or(&slack_url.ts)
+            .to_string(),
+    ]
+    .join("-")
+        + ".json"
 }
