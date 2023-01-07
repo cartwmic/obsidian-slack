@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use do_notation::m;
+use serde::Serialize;
 use tuple_conv::RepeatedTuple;
 
 use crate::{

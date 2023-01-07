@@ -105,33 +105,15 @@ impl MessageToSave {
     }
 }
 
+#[wasm_bindgen(module = "index")]
+extern "C" {
+    #[wasm_bindgen(js_name=obsidian_request)]
+    fn request(request: JsValue) -> Promise;
+}
+
 #[wasm_bindgen()]
 extern "C" {
     fn alert(message: &str);
-
-    #[wasm_bindgen(js_namespace = ["navigator", "clipboard"])]
-    fn writeText(data: &str) -> Promise;
-}
-
-#[wasm_bindgen(module = "obsidian")]
-extern "C" {
-    fn request(request: JsValue) -> Promise;
-
-    type Notice;
-
-    #[wasm_bindgen(constructor)]
-    fn new_with_timeout(message: &str, timeout_in_ms: u32) -> Notice;
-
-    #[wasm_bindgen(constructor)]
-    fn new(message: &str) -> Notice;
-
-    pub type Vault;
-
-    #[wasm_bindgen(method)]
-    fn getConfig(this: &Vault, key: &str) -> String;
-
-    #[wasm_bindgen(method)]
-    fn create(this: &Vault, path: &str, content: JsString) -> Promise;
 }
 
 #[wasm_bindgen]
@@ -186,59 +168,35 @@ pub async fn get_slack_message(
     api_token: String,
     cookie: String,
     url: String,
-    vault: Vault,
     feature_flags: JsValue,
-) {
-    #[derive(Clone, Builder, Default)]
-    #[builder(default)]
+) -> JsValue {
+    #[derive(Clone, Serialize)]
     struct Buffer {
-        message_and_thread: Option<MessageAndThreadToSave>,
-        slack_url: Option<SlackUrl>,
-        file_name: Option<String>,
+        message_and_thread: MessageAndThreadToSave,
+        file_name: String,
     }
 
     // separate calls for intermediate results due to `and_then` closures not allowing await
-    let buffer = get_results_from_api(api_token, cookie, url, feature_flags)
-        .await
-        .map(|(message_and_thread, slack_url)| {
-            BufferBuilder::default()
-                .message_and_thread(Some(message_and_thread))
-                .slack_url(Some(slack_url))
-                .build()
-                .unwrap()
-        });
+    let results_from_api = get_results_from_api(api_token, cookie, url, feature_flags).await;
 
-    let buffer = match buffer {
-        Ok(mut buffer) => create_file_from_result(
-            buffer.message_and_thread.as_ref().unwrap(),
-            buffer.slack_url.as_ref().unwrap(),
-            vault,
-        )
-        .await
-        .map(|file_name| {
-            buffer.file_name = Some(file_name);
-            buffer
-        }),
-        Err(err) => Err(err),
-    };
-
-    let buffer = match buffer {
-        Ok(buffer) => save_to_clipboard(buffer.file_name.as_ref().unwrap())
-            .await
-            .map(|_| buffer),
-        Err(err) => Err(err),
-    };
-
-    match buffer {
-        Ok(_) => {
-            Notice::new_with_timeout("Successfully downloaded slack message and saved to attachment file. Attachment file name saved to clipboard", 5000);
-        }
-        Err(err) => {
+    m! {
+        results_from_api <- results_from_api;
+        let (message_and_thread, slack_url) = results_from_api;
+        let file_name = create_file_name(&slack_url);
+        return Buffer {
+            message_and_thread,
+            file_name
+        };
+    }
+    .map_or_else(
+        |err| {
             let message = format!("There was a problem getting slack messages. Error: {}", err);
             log::error!("{}", &message);
-            alert(&message)
-        }
-    }
+            alert(&message);
+            JsValue::NULL
+        },
+        |buffer| serde_wasm_bindgen::to_value(&buffer).unwrap(),
+    )
 }
 
 async fn get_results_from_api(
@@ -310,48 +268,15 @@ async fn get_results_from_api(
     })
 }
 
-async fn create_file_from_result(
-    message_and_thread: &MessageAndThreadToSave,
-    slack_url: &SlackUrl,
-    vault: Vault,
-) -> Result<String, errors::SlackError> {
-    match m! {
-        let attachments_folder = vault.getConfig(ATTACHMENT_FOLDER_CONFIG_KEY);
-        let file_name = vec![
-            slack_url.channel_id.to_string(),
-            slack_url
-                .thread_ts
-                .as_ref()
-                .unwrap_or(&slack_url.ts)
-                .to_string(),
-        ]
-        .join("-")
-            + ".json";
-        let new_file_path = Path::new(&attachments_folder)
-            .join(&file_name)
-            .to_str()
-            .unwrap()
-            .to_string();
-        json_str <- JSON::stringify_with_replacer_and_space(
-            &serde_wasm_bindgen::to_value(&message_and_thread).unwrap(),
-            &JsValue::NULL,
-            &JsValue::from_f64(2.0
-        ))
-        .map_err(errors::SlackError::Js);
-        return (json_str, file_name, new_file_path, vault);
-    } {
-        Ok((json_str, file_name, new_file_path, vault)) => {
-            wasm_bindgen_futures::JsFuture::from(vault.create(&new_file_path, json_str))
-                .await
-                .map_err(errors::SlackError::Js)
-                .map(|_| file_name)
-        }
-        Err(err) => Err(err),
-    }
-}
-
-async fn save_to_clipboard(file_name: &str) -> Result<JsValue, errors::SlackError> {
-    wasm_bindgen_futures::JsFuture::from(writeText(file_name))
-        .await
-        .map_err(errors::SlackError::Js)
+fn create_file_name(slack_url: &SlackUrl) -> String {
+    vec![
+        slack_url.channel_id.to_string(),
+        slack_url
+            .thread_ts
+            .as_ref()
+            .unwrap_or(&slack_url.ts)
+            .to_string(),
+    ]
+    .join("-")
+        + ".json"
 }
