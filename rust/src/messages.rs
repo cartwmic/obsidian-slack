@@ -10,7 +10,7 @@ use crate::{
         get_api_base, SlackHttpClient, SlackHttpClientConfig, SlackResponseValidator,
     },
     slack_url::SlackUrl,
-    utils::{convert_result_string_to_object, make_request},
+    utils::convert_result_string_to_object,
 };
 
 #[derive(Serialize, Deserialize, Clone)]

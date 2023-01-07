@@ -18,6 +18,7 @@ use errors::SlackError;
 use js_sys::{JsString, Promise, JSON};
 use messages::Message;
 use serde::{Deserialize, Serialize};
+use serde_wasm_bindgen::Serializer;
 use slack_http_client::SlackHttpClientConfigFeatureFlags;
 use slack_url::SlackUrl;
 use std::{collections::HashMap, path::Path, str::FromStr};
@@ -26,9 +27,9 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     messages::MessageAndThread,
-    slack_http_client::{get_api_base, SlackHttpClient, SlackHttpClientConfig},
+    slack_http_client::{get_api_base, RequestUrlParam, SlackHttpClient, SlackHttpClientConfig},
     users::User,
-    utils::{create_file_name, make_request},
+    utils::create_file_name,
 };
 
 static ATTACHMENT_FOLDER_CONFIG_KEY: &str = "attachmentFolderPath";
@@ -105,13 +106,7 @@ impl MessageToSave {
     }
 }
 
-#[wasm_bindgen(module = "index")]
-extern "C" {
-    #[wasm_bindgen(js_name=obsidian_request)]
-    fn request(request: JsValue) -> Promise;
-}
-
-#[wasm_bindgen()]
+#[wasm_bindgen]
 extern "C" {
     fn alert(message: &str);
 }
@@ -169,6 +164,7 @@ pub async fn get_slack_message(
     cookie: String,
     url: String,
     feature_flags: JsValue,
+    request_func: JsValue,
 ) -> JsValue {
     #[derive(Clone, Serialize)]
     struct Buffer {
@@ -177,7 +173,8 @@ pub async fn get_slack_message(
     }
 
     // separate calls for intermediate results due to `and_then` closures not allowing await
-    let results_from_api = get_results_from_api(api_token, cookie, url, feature_flags).await;
+    let results_from_api =
+        get_results_from_api(api_token, cookie, url, feature_flags, request_func).await;
 
     m! {
         results_from_api <- results_from_api;
@@ -199,21 +196,35 @@ pub async fn get_slack_message(
     )
 }
 
+fn curry_request_func(
+    request_func: js_sys::Function,
+) -> Box<dyn Fn(slack_http_client::RequestUrlParam) -> js_sys::Promise> {
+    Box::new(move |params: RequestUrlParam| -> Promise {
+        let serializer = Serializer::json_compatible();
+        js_sys::Promise::from(
+            request_func
+                .call1(&JsValue::NULL, &params.serialize(&serializer).unwrap())
+                .unwrap(),
+        )
+    })
+}
+
 async fn get_results_from_api(
     api_token: String,
     cookie: String,
     url: String,
     feature_flags: JsValue,
+    request_func: JsValue,
 ) -> Result<(MessageAndThreadToSave, SlackUrl), errors::SlackError> {
     // separate calls for intermediate results due to `and_then` closures not allowing await
-    #[derive(Clone, Builder, Default)]
-    #[builder(default)]
     struct Buffer {
         message_and_thread: Option<MessageAndThread>,
         slack_url: Option<SlackUrl>,
         users: Option<HashMap<String, User>>,
         client: Option<SlackHttpClient<Promise>>,
     }
+
+    let make_request = curry_request_func(js_sys::Function::from(request_func));
 
     let buffer = m! {
         feature_flags <- serde_wasm_bindgen::from_value(feature_flags).map_err(errors::SlackError::SerdeWasmBindgen);
@@ -226,11 +237,7 @@ async fn get_results_from_api(
             );
         slack_url <- SlackUrl::new(&url);
         let client = SlackHttpClient::<Promise>::new(config, make_request);
-        return BufferBuilder::create_empty()
-                .client(Some(client))
-                .slack_url(Some(slack_url))
-                .build()
-                .unwrap();
+        return Buffer {client: Some(client), slack_url: Some(slack_url), users: None, message_and_thread: None};
     };
 
     let buffer = match buffer {

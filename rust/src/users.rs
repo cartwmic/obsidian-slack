@@ -12,7 +12,6 @@ use crate::{
         get_api_base, SlackHttpClient, SlackHttpClientConfig, SlackResponseValidator,
     },
     utils::convert_result_string_to_object,
-    utils::make_request,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

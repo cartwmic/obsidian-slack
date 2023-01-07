@@ -102,16 +102,15 @@ pub enum SlackApiQueryParams {
     pretty,
 }
 
-#[derive(Builder, Debug, Clone)]
 pub struct SlackHttpClient<ClientReturnType> {
     config: SlackHttpClientConfig,
-    request_func: fn(RequestUrlParam) -> ClientReturnType,
+    request_func: Box<dyn Fn(RequestUrlParam) -> ClientReturnType>,
 }
 
 impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
     pub fn new(
         config: SlackHttpClientConfig,
-        request_func: fn(RequestUrlParam) -> ClientReturnType,
+        request_func: Box<dyn Fn(RequestUrlParam) -> ClientReturnType>,
     ) -> SlackHttpClient<ClientReturnType> {
         SlackHttpClient {
             config,
