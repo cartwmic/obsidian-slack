@@ -71,20 +71,23 @@ fn get_mock_request_function(
             team_id: Some("mock_team".to_string()),
             name: Some("mock_name".to_string()),
             real_name: Some("mock_real_name".to_string()),
-        }),
-    } ; "when both operands are negative")]
-#[wasm_bindgen_test]
-async fn get_slack_message_successfully_returns_successfully(
-    message_response: MessageResponse,
-    user_response: UserResponse,
-) {
-    let feature_flags = serde_wasm_bindgen::to_value(&SlackHttpClientConfigFeatureFlags {
+        })
+    },
+    SlackHttpClientConfigFeatureFlags {
         get_users: true,
         get_reactions: false,
         get_channel_info: false,
         get_attachments: false,
         get_team_info: false,
-    })
+    }
+    ; "when message is ok")]
+#[wasm_bindgen_test]
+async fn get_slack_message_successfully_returns_successfully(
+    message_response: MessageResponse,
+    user_response: UserResponse,
+    feature_flags: SlackHttpClientConfigFeatureFlags
+) {
+    let feature_flags = serde_wasm_bindgen::to_value(&feature_flags)
     .unwrap();
 
     let request_func = get_mock_request_function(message_response, user_response);
