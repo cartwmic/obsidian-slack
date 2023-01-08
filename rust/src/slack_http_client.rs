@@ -51,11 +51,11 @@ pub struct SlackHttpClientConfig {
 
 #[derive(Debug, Serialize, Deserialize, Builder, Clone)]
 pub struct SlackHttpClientConfigFeatureFlags {
-    get_users: bool,
-    get_reactions: bool,
-    get_channel_info: bool,
-    get_attachments: bool,
-    get_team_info: bool,
+    pub get_users: bool,
+    pub get_reactions: bool,
+    pub get_channel_info: bool,
+    pub get_attachments: bool,
+    pub get_team_info: bool,
 }
 
 impl SlackHttpClientConfig {

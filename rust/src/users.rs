@@ -16,17 +16,17 @@ use crate::{
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct User {
-    id: String,
-    team_id: Option<String>,
-    name: Option<String>,
-    real_name: Option<String>,
+    pub id: String,
+    pub team_id: Option<String>,
+    pub name: Option<String>,
+    pub real_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserResponse {
-    ok: Option<bool>,
-    error: Option<String>,
-    user: Option<User>,
+    pub ok: Option<bool>,
+    pub error: Option<String>,
+    pub user: Option<User>,
 }
 
 impl SlackResponseValidator for UserResponse {

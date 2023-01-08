@@ -53,11 +53,11 @@ pub struct MessageResponseMetadata {
 pub struct MessageResponse {
     pub is_null: Option<bool>,
     pub messages: Option<Vec<Message>>,
-    has_more: Option<bool>,
-    is_thread: Option<bool>,
+    pub has_more: Option<bool>,
+    pub is_thread: Option<bool>,
     pub ok: Option<bool>,
     pub error: Option<String>,
-    response_metadata: Option<MessageResponseMetadata>,
+    pub response_metadata: Option<MessageResponseMetadata>,
 }
 
 impl MessageResponse {

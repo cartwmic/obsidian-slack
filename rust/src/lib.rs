@@ -6,10 +6,10 @@
 //! corresponding 'xoxd' cookie.
 
 mod errors;
-mod messages;
-mod slack_http_client;
+pub mod messages;
+pub mod slack_http_client;
 mod slack_url;
-mod users;
+pub mod users;
 mod utils;
 
 use derive_builder::Builder;
@@ -189,8 +189,7 @@ pub async fn get_slack_message(
         |err| {
             let message = format!("There was a problem getting slack messages. Error: {}", err);
             log::error!("{}", &message);
-            alert(&message);
-            JsValue::NULL
+            JsValue::from_str(&message)
         },
         |buffer| serde_wasm_bindgen::to_value(&buffer).unwrap(),
     )

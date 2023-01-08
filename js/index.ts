@@ -2,6 +2,7 @@ import wasm from "../rust/Cargo.toml"
 import { App, Modal, Notice, Plugin, PluginSettingTab, request, RequestUrlParam, Setting, Vault } from 'obsidian';
 import { LocalStorageSettings } from "localStorageSettings";
 import * as path from "path";
+import { json } from "stream/consumers";
 
 
 interface ObsidianSlackPluginSettings {
@@ -22,10 +23,6 @@ const DEFAULT_SETTINGS: ObsidianSlackPluginSettings = {
 	get_channel_info: false,
 	get_attachments: false,
 	get_team_info: false
-}
-
-export function obsidian_request(req: RequestUrlParam): Promise<string> {
-	return request(req);
 }
 
 export default class ObsidianSlackPlugin extends Plugin {
@@ -61,9 +58,9 @@ export default class ObsidianSlackPlugin extends Plugin {
 class GetSlackMessageModal extends Modal {
 	url: string;
 	plugin: ObsidianSlackPlugin;
-	get_slack_message: (apiToken: string, cookie: string, url: string, feature_flags: any) => any;
+	get_slack_message: (apiToken: string, cookie: string, url: string, feature_flags: any, request_func: (params: RequestUrlParam) => Promise<string>) => any;
 
-	constructor(app: App, plugin: ObsidianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string, feature_flags: any) => any) {
+	constructor(app: App, plugin: ObsidianSlackPlugin, get_slack_message: (apiToken: string, cookie: string, url: string, feature_flags: any, request_func: (params: RequestUrlParam) => Promise<string>) => any) {
 		super(app);
 		this.get_slack_message = get_slack_message;
 		this.plugin = plugin;
@@ -110,9 +107,14 @@ class GetSlackMessageModal extends Modal {
 					"get_channel_info": this.plugin.settings.get_channel_info,
 					"get_attachments": this.plugin.settings.get_attachments,
 					"get_team_info": this.plugin.settings.get_team_info,
-				});
+				}, request);
 
 				try {
+					if (typeof (result) === "string") {
+						alert(result)
+						result = null;
+					}
+
 					let file_saved = false;
 					if (result) {
 						file_saved = await this.saveResults(result);

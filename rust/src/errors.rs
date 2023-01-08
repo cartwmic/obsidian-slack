@@ -28,22 +28,22 @@ pub enum SlackUrlError {
 
 #[derive(Debug, Error)]
 pub enum SlackError {
-    #[error("{0}")]
+    #[error("slack url error {0}")]
     SlackUrl(SlackUrlError),
-    #[error("{0}")]
+    #[error("slack http client error {0}")]
     SlackHttpClient(SlackHttpClientError),
-    #[error("{0:#?}")]
+    #[error("js parsing error {0:#?}")]
     Js(JsValue),
-    #[error("{0}")]
+    #[error("js parsed a value that was not an object {0}")]
     JsValueNotObject(String),
-    #[error("{0}")]
+    #[error("the response was not ok {0}")]
     ResponseNotOk(String),
-    #[error("{0}")]
+    #[error("the response was not an object {0}")]
     ResponseNotAnObject(String),
-    #[error("{0}")]
+    #[error("the result was empty {0}")]
     EmptyResult(String),
-    #[error("{0}")]
+    #[error("serded wasm parsing errored {0}")]
     SerdeWasmBindgen(serde_wasm_bindgen::Error),
-    #[error("")]
+    #[error("Missing user info")]
     MissingUsers,
 }
