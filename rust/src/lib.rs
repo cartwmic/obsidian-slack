@@ -32,68 +32,86 @@ use crate::{
     utils::create_file_name,
 };
 
-static ATTACHMENT_FOLDER_CONFIG_KEY: &str = "attachmentFolderPath";
+#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq)]
+pub struct ObsidianSlackReturnData {
+    pub message_and_thread: MessageAndThreadToSave,
+}
 
-#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
-struct MessageAndThreadToSave {
-    message: Vec<MessageToSave>,
-    thread: Vec<MessageToSave>,
+#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq, Default)]
+#[builder(default)]
+pub struct MessageAndThreadToSave {
+    pub message: Vec<MessageToSave>,
+    pub thread: Vec<MessageToSave>,
+    pub file_name: String,
 }
 
 impl MessageAndThreadToSave {
-    fn from_message_and_thread_and_users(
+    fn from_components(
         message_and_thread: &MessageAndThread,
-        users: &HashMap<String, User>,
+        users: Option<&HashMap<String, User>>,
     ) -> Result<MessageAndThreadToSave, SlackError> {
         let message_messages = message_and_thread
             .message
             .messages
             .as_ref()
-            .unwrap()
+            .expect("Expected messages to unwrap, no messages found for main message")
             .iter()
-            .map(|message| MessageToSave::from_message_and_user_map(message, users))
-            .collect::<Result<Vec<MessageToSave>, SlackError>>();
+            .map(|message| MessageToSave::from_components(message, users))
+            .collect::<Result<Vec<MessageToSave>, SlackError>>()?;
 
-        message_messages.and_then(|message_messages| {
-            let thread_messages = message_and_thread
-                .thread
-                .messages
-                .as_ref()
-                .unwrap()
-                .iter()
-                .map(|message| MessageToSave::from_message_and_user_map(message, users))
-                .collect::<Result<Vec<MessageToSave>, SlackError>>();
-            thread_messages.map(|thread_messages| {
-                MessageAndThreadToSaveBuilder::default()
-                    .thread(thread_messages)
-                    .message(message_messages)
-                    .build()
-                    .unwrap()
-            })
-        })
+        let thread_messages = message_and_thread
+            .thread
+            .messages
+            .as_ref()
+            .expect("Expected messages to unwrap, no messages found for thread")
+            .iter()
+            .map(|message| MessageToSave::from_components(message, users))
+            .collect::<Result<Vec<MessageToSave>, SlackError>>()?;
+
+        Ok(MessageAndThreadToSaveBuilder::default()
+            .thread(thread_messages)
+            .message(message_messages)
+            .build()
+            .unwrap())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
-struct MessageToSave {
-    r#type: Option<String>,
-    user: Option<User>,
-    text: Option<String>,
-    thread_ts: Option<String>,
-    reply_count: Option<u16>,
-    team: Option<String>,
-    ts: Option<String>,
+#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq, Default)]
+#[builder(default)]
+pub struct MessageToSave {
+    pub r#type: Option<String>,
+    pub user_id: Option<String>,
+    pub user: Option<User>,
+    pub text: Option<String>,
+    pub thread_ts: Option<String>,
+    pub reply_count: Option<u16>,
+    pub team: Option<String>,
+    pub ts: Option<String>,
 }
 
 impl MessageToSave {
-    fn from_message_and_user_map(
+    fn from_components(
         message: &Message,
-        users: &HashMap<String, User>,
+        users: Option<&HashMap<String, User>>,
     ) -> Result<MessageToSave, SlackError> {
-        match users.get(message.user.as_ref().unwrap()) {
-            Some(user) => Ok(MessageToSaveBuilder::default()
+        match users {
+            Some(users) => match users.get(message.user.as_ref().unwrap()) {
+                Some(user) => Ok(MessageToSaveBuilder::default()
+                    .r#type(message.r#type.clone())
+                    .user_id(Some(message.user.as_ref().unwrap().to_string()))
+                    .user(Some(user.to_owned()))
+                    .text(message.text.clone())
+                    .thread_ts(message.thread_ts.clone())
+                    .reply_count(message.reply_count)
+                    .team(message.team.clone())
+                    .ts(message.ts.clone())
+                    .build()
+                    .unwrap()),
+                None => Err(SlackError::MissingUsers),
+            },
+            None => Ok(MessageToSaveBuilder::default()
                 .r#type(message.r#type.clone())
-                .user(Some(user.to_owned()))
+                .user_id(Some(message.user.as_ref().unwrap().to_string()))
                 .text(message.text.clone())
                 .thread_ts(message.thread_ts.clone())
                 .reply_count(message.reply_count)
@@ -101,14 +119,8 @@ impl MessageToSave {
                 .ts(message.ts.clone())
                 .build()
                 .unwrap()),
-            None => Err(SlackError::MissingUsers),
         }
     }
-}
-
-#[wasm_bindgen]
-extern "C" {
-    fn alert(message: &str);
 }
 
 #[wasm_bindgen]
@@ -166,23 +178,17 @@ pub async fn get_slack_message(
     feature_flags: JsValue,
     request_func: JsValue,
 ) -> JsValue {
-    #[derive(Clone, Serialize)]
-    struct Buffer {
-        message_and_thread: MessageAndThreadToSave,
-        file_name: String,
-    }
-
     // separate calls for intermediate results due to `and_then` closures not allowing await
     let results_from_api =
         get_results_from_api(api_token, cookie, url, feature_flags, request_func).await;
 
     m! {
         results_from_api <- results_from_api;
-        let (message_and_thread, slack_url) = results_from_api;
+        let (mut message_and_thread, slack_url) = results_from_api;
         let file_name = create_file_name(&slack_url);
-        return Buffer {
-            message_and_thread,
-            file_name
+        return {
+            message_and_thread.file_name = file_name;
+            ObsidianSlackReturnData {message_and_thread}
         };
     }
     .map_or_else(
@@ -216,16 +222,9 @@ async fn get_results_from_api(
     request_func: JsValue,
 ) -> Result<(MessageAndThreadToSave, SlackUrl), errors::SlackError> {
     // separate calls for intermediate results due to `and_then` closures not allowing await
-    struct Buffer {
-        message_and_thread: Option<MessageAndThread>,
-        slack_url: Option<SlackUrl>,
-        users: Option<HashMap<String, User>>,
-        client: Option<SlackHttpClient<Promise>>,
-    }
-
     let make_request = curry_request_func(js_sys::Function::from(request_func));
 
-    let buffer = m! {
+    let (client, slack_url) = m! {
         feature_flags <- serde_wasm_bindgen::from_value(feature_flags).map_err(errors::SlackError::SerdeWasmBindgen);
         let _ = log::info!("{:#?}", feature_flags);
         config <- SlackHttpClientConfig::new(
@@ -236,40 +235,19 @@ async fn get_results_from_api(
             );
         slack_url <- SlackUrl::new(&url);
         let client = SlackHttpClient::<Promise>::new(config, make_request);
-        return Buffer {client: Some(client), slack_url: Some(slack_url), users: None, message_and_thread: None};
+        return (client, slack_url);
+    }?;
+
+    let messages = messages::get_messages_from_api(&client, &slack_url).await?;
+
+    let users = if client.config.feature_flags.get_users {
+        let user_ids = messages.collect_users()?;
+        let users = users::get_users_from_api(&user_ids, &client).await?;
+        Some(users)
+    } else {
+        None
     };
 
-    let buffer = match buffer {
-        Ok(mut buffer) => messages::get_messages_from_api(
-            buffer.client.as_ref().unwrap(),
-            buffer.slack_url.as_ref().unwrap(),
-        )
-        .await
-        .map(|message_and_thread| {
-            buffer.message_and_thread = Some(message_and_thread);
-            buffer
-        }),
-        Err(err) => Err(err),
-    };
-
-    let buffer = match buffer {
-        Ok(mut buffer) => match buffer.message_and_thread.as_ref().unwrap().collect_users() {
-            Ok(user_ids) => users::get_users_from_api(&user_ids, buffer.client.as_ref().unwrap())
-                .await
-                .map(|users| {
-                    buffer.users = Some(users);
-                    buffer
-                }),
-            Err(err) => Err(err),
-        },
-        Err(err) => Err(err),
-    };
-
-    buffer.and_then(|buffer| {
-        MessageAndThreadToSave::from_message_and_thread_and_users(
-            buffer.message_and_thread.as_ref().unwrap(),
-            buffer.users.as_ref().unwrap(),
-        )
-        .map(|message_and_thread| (message_and_thread, buffer.slack_url.unwrap()))
-    })
+    MessageAndThreadToSave::from_components(&messages, users.as_ref())
+        .map(|message_and_thread| (message_and_thread, slack_url))
 }

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use do_notation::m;
 use js_sys::{Promise, JSON};
 use serde::Serialize;
@@ -30,14 +32,22 @@ pub fn convert_result_string_to_object(val: JsValue) -> Result<JsValue, SlackErr
 }
 
 pub fn create_file_name(slack_url: &SlackUrl) -> String {
-    vec![
-        slack_url.channel_id.to_string(),
+    let mut items = vec![slack_url.channel_id.to_string()];
+    let mut other_items = vec![
         slack_url
             .thread_ts
             .as_ref()
             .unwrap_or(&slack_url.ts)
             .to_string(),
+        slack_url.ts.to_string(),
     ]
-    .join("-")
-        + ".json"
+    .into_iter()
+    .collect::<HashSet<String>>()
+    .into_iter()
+    .collect::<Vec<String>>();
+    other_items.sort();
+
+    items.extend(other_items);
+    // .collect::<Vec<String>>()
+    items.join("-") + ".json"
 }

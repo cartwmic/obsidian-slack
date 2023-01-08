@@ -14,7 +14,7 @@ use crate::{
     utils::convert_result_string_to_object,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct User {
     pub id: String,
     pub team_id: Option<String>,

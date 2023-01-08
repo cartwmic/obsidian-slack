@@ -46,7 +46,7 @@ pub struct SlackHttpClientConfig {
     api_base: url::Url,
     token: String,
     cookie: String,
-    feature_flags: SlackHttpClientConfigFeatureFlags,
+    pub feature_flags: SlackHttpClientConfigFeatureFlags,
 }
 
 #[derive(Debug, Serialize, Deserialize, Builder, Clone)]
@@ -103,7 +103,7 @@ pub enum SlackApiQueryParams {
 }
 
 pub struct SlackHttpClient<ClientReturnType> {
-    config: SlackHttpClientConfig,
+    pub config: SlackHttpClientConfig,
     request_func: Box<dyn Fn(RequestUrlParam) -> ClientReturnType>,
 }
 

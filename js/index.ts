@@ -121,7 +121,7 @@ class GetSlackMessageModal extends Modal {
 					}
 
 					if (file_saved) {
-						await navigator.clipboard.writeText(result.file_name);
+						await navigator.clipboard.writeText(result.message_and_thread.file_name);
 						new Notice("Successfully downloaded slack message and saved to attachment folder. File name saved to clipboard", 5000);
 					}
 				}
@@ -140,7 +140,7 @@ class GetSlackMessageModal extends Modal {
 
 	async saveResults(result: any): Promise<boolean> {
 		let attachment_path = this.app.vault.getConfig("attachmentFolderPath");
-		let file_path = path.join(attachment_path, result.file_name);
+		let file_path = path.join(attachment_path, result.message_and_thread.file_name);
 		let tfile = await this.app.vault.create(file_path, JSON.stringify(result.message_and_thread, undefined, 2));
 		return tfile ? true : false;
 	}
