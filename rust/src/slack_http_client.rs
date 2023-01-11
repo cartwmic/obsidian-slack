@@ -1,15 +1,47 @@
+use amplify_derive::Display;
 use derive_builder::Builder;
+use do_notation::m;
+use js_sys::JSON;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Borrow, collections::HashMap, str::FromStr};
+use snafu::{ensure, ResultExt, Snafu};
+use std::{borrow::Borrow, collections::HashMap, fmt::Display, str::FromStr};
 use url::Url;
+use wasm_bindgen::JsValue;
 
-use crate::errors::{SlackError, SlackHttpClientError};
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display(
+        "Provided api token was invalid. Api token must start with 'xoxc': {api_token}"
+    ))]
+    InvalidSlackApiToken { api_token: String },
+
+    #[snafu(display("Provided api cookie was invalid. Cookie must start with 'xoxd': {cookie}"))]
+    InvalidSlackApiCookie { cookie: String },
+}
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub fn get_api_base() -> Url {
     Url::from_str("https://slack.com/api").unwrap()
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+fn validate_slack_api_token(api_token: &str) -> Result<&str> {
+    ensure!(
+        api_token.starts_with("xoxc"),
+        InvalidSlackApiTokenSnafu { api_token }
+    );
+    Ok(api_token)
+}
+
+fn validate_slack_api_cookie(cookie: &str) -> Result<&str> {
+    ensure!(
+        cookie.starts_with("xoxd"),
+        InvalidSlackApiCookieSnafu { cookie }
+    );
+    Ok(cookie)
+}
+
+#[derive(Debug, Serialize, Deserialize, Display)]
+#[display(Debug)]
 pub struct RequestUrlParam {
     url: String,
     method: String,
@@ -21,23 +53,6 @@ impl RequestUrlParam {
     fn with_url(mut self, url: String) -> Self {
         self.url = url;
         self
-    }
-}
-
-pub trait SlackResponseValidator {
-    fn ok(&self) -> Option<bool>;
-
-    fn validate_response(self) -> Result<Self, SlackError>
-    where
-        Self: Sized,
-        Self: std::fmt::Debug,
-    {
-        if self.ok().unwrap() {
-            Ok(self)
-        } else {
-            log::info!("{:#?}", self);
-            Err(SlackError::ResponseNotOk(format!("{:#?}", self)))
-        }
     }
 }
 
@@ -64,7 +79,7 @@ impl SlackHttpClientConfig {
         token: String,
         cookie: String,
         feature_flags: SlackHttpClientConfigFeatureFlags,
-    ) -> Result<SlackHttpClientConfig, SlackError> {
+    ) -> Result<SlackHttpClientConfig> {
         let log_prefix = "rust|SlackHttpClientConfig|new";
         log::info!(
             "{}|api_base={}|token={}|cookie={}",
@@ -75,20 +90,17 @@ impl SlackHttpClientConfig {
         );
 
         log::info!("{}|validate token", &log_prefix);
-        let token = validate_slack_api_token(token.as_str());
-        let cookie = validate_slack_api_cookie(cookie.as_str());
+        let token = validate_slack_api_token(token.as_str())?;
 
-        match (token, cookie) {
-            (Ok(the_token), Ok(the_cookie)) => Ok(SlackHttpClientConfig {
-                api_base,
-                token: the_token.to_string(),
-                cookie: the_cookie.to_string(),
-                feature_flags,
-            }),
-            (Err(a), Err(_)) => Err(a),
-            (Err(a), Ok(_)) => Err(a),
-            (Ok(_), Err(b)) => Err(b),
-        }
+        log::info!("{}|validate cookie", &log_prefix);
+        let cookie = validate_slack_api_cookie(cookie.as_str())?;
+
+        Ok(SlackHttpClientConfig {
+            api_base,
+            token: token.to_string(),
+            cookie: cookie.to_string(),
+            feature_flags,
+        })
     }
 }
 
@@ -213,25 +225,5 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
 
         log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);
         (self.request_func)(the_request)
-    }
-}
-
-fn validate_slack_api_token(api_token: &str) -> Result<&str, SlackError> {
-    if !api_token.starts_with("xoxc") {
-        Err(SlackError::SlackHttpClient(
-            SlackHttpClientError::InvalidApiToken("Did not start with 'xoxc'".to_string()),
-        ))
-    } else {
-        Ok(api_token)
-    }
-}
-
-fn validate_slack_api_cookie(cookie: &str) -> Result<&str, SlackError> {
-    if !cookie.starts_with("xoxd") {
-        Err(SlackError::SlackHttpClient(
-            SlackHttpClientError::InvalidApiCookie("Did not start with 'xoxd'".to_string()),
-        ))
-    } else {
-        Ok(cookie)
     }
 }

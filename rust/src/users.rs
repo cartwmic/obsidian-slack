@@ -1,20 +1,39 @@
 use std::collections::{HashMap, HashSet};
 
+use amplify_derive::Display;
 use do_notation::m;
 use futures::future::join_all;
 use js_sys::Promise;
 use serde::{Deserialize, Serialize};
+use snafu::{ResultExt, Snafu};
 use wasm_bindgen_futures::JsFuture;
 
 use crate::{
-    errors::SlackError,
+    response::{self, convert_result_string_to_object, SlackResponseValidator},
     slack_http_client::{
-        get_api_base, SlackHttpClient, SlackHttpClientConfig, SlackResponseValidator,
+        self, get_api_base, RequestUrlParam, SlackHttpClient, SlackHttpClientConfig,
     },
-    utils::convert_result_string_to_object,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Awaiting a JsFuture returned an error: {error}"))]
+    WasmErrorFromJsFuture { error: String },
+
+    #[snafu(display("{source}"))]
+    SerdeWasmBindgenCouldNotParseUserResponse { source: response::Error },
+
+    #[snafu(display("The user response was not ok. - source: {source}"))]
+    InvalidUserResponse { source: response::Error },
+
+    #[snafu(display("Could not parse json from user response string - source: {source}"))]
+    CouldNotParseJsonFromUserResponse { source: response::Error },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Display)]
+#[display(Debug)]
 pub struct User {
     pub id: String,
     pub team_id: Option<String>,
@@ -38,39 +57,39 @@ impl SlackResponseValidator for UserResponse {
 pub async fn get_users_from_api<T>(
     user_ids: &HashSet<String>,
     client: &SlackHttpClient<T>,
-) -> Result<HashMap<String, User>, SlackError>
+) -> Result<HashMap<String, User>>
 where
     wasm_bindgen_futures::JsFuture: std::convert::From<T>,
 {
-    let users: Vec<JsFuture> = user_ids
+    let users = user_ids
         .iter()
         .map(|user_id| JsFuture::from(client.get_user_info(user_id)))
-        .collect();
+        .collect::<Vec<JsFuture>>();
 
-    let users: Result<Vec<UserResponse>, SlackError> = join_all(users)
+    let user_responses = join_all(users)
         .await
         .into_iter()
         .map(|result| {
-            result
-                .map_err(SlackError::Js)
-                .and_then(convert_result_string_to_object)
-                .and_then(|response| {
-                    serde_wasm_bindgen::from_value(response)
-                        .map_err(SlackError::SerdeWasmBindgen)
-                        .and_then(UserResponse::validate_response)
-                })
+            m! {
+                // mapping error instead of using snafu context because jsvalue is not an Error from parse method
+                val <- result.map_err(|err| Error::WasmErrorFromJsFuture {
+                    error: format!("{:#?}", err),
+                });
+                js_obj <- convert_result_string_to_object(val).context(CouldNotParseJsonFromUserResponseSnafu);
+                user_response <- response::defined_from_js_object(js_obj).context(SerdeWasmBindgenCouldNotParseUserResponseSnafu);
+                valid_response <- UserResponse::validate_response(user_response).context(InvalidUserResponseSnafu);
+                return valid_response;
+            }
         })
-        .collect();
+        .collect::<Result<Vec<UserResponse>>>()?;
 
-    users.map(|user_responses| {
-        user_ids
-            .iter()
-            .map(String::to_string)
-            .zip(
-                user_responses
-                    .into_iter()
-                    .map(|user_response| user_response.user.unwrap()),
-            )
-            .collect::<HashMap<String, User>>()
-    })
+    Ok(user_ids
+        .iter()
+        .map(String::to_string)
+        .zip(
+            user_responses
+                .into_iter()
+                .map(|user_response| user_response.user.unwrap()),
+        )
+        .collect::<HashMap<String, User>>())
 }

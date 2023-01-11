@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::JsValue;
 
-use crate::{errors::SlackError, slack_http_client::RequestUrlParam, slack_url::SlackUrl};
+use crate::{slack_http_client::RequestUrlParam, slack_url::SlackUrl};
 
 pub fn set_panic_hook() {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -17,18 +17,6 @@ pub fn set_panic_hook() {
     // https://github.com/rustwasm/console_error_panic_hook#readme
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
-}
-
-pub fn convert_result_string_to_object(val: JsValue) -> Result<JsValue, SlackError> {
-    // results from the `request` function of obsidian return strings
-    m! {
-        str_val <- val
-                   .as_string()
-                   .map_or(Err(SlackError::EmptyResult(format!("{:#?}", val))), Ok);
-        obj_val <- JSON::parse(&str_val)
-                   .map_err(|err| SlackError::ResponseNotAnObject(format!("{:#?} | {:#?}", err, val)));
-        return obj_val;
-    }
 }
 
 pub fn create_file_name(slack_url: &SlackUrl) -> String {

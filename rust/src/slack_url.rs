@@ -1,13 +1,33 @@
-use std::str::FromStr;
+use std::{path, str::FromStr};
 
 use do_notation::m;
-use serde::Serialize;
+use snafu::{ResultExt, Snafu};
 use tuple_conv::RepeatedTuple;
+use url::{ParseError, Url};
 
-use crate::{
-    errors::{SlackError, SlackUrlError},
-    slack_http_client::SlackApiQueryParams,
-};
+use crate::slack_http_client::SlackApiQueryParams;
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("An error occurred while parsing the slack url: {url}"))]
+    UrlCrateCouldNotParse { url: String, source: ParseError },
+
+    #[snafu(display("Path segments not found in url: {url}"))]
+    PathSegmentsNotFound { url: String },
+
+    #[snafu(display(
+        "Channel id not found in path segments of url. Channel id must start with 'C', 'D', or 'G'. Path segments: {path_segments}"
+    ))]
+    ChannelIdNotFoundInPathSegments { path_segments: String },
+
+    #[snafu(display("Timestamp was not found in the url: {url}"))]
+    TimestampNotFound { url: String },
+
+    #[snafu(display("There was an issue parsing the timestamp for the url: {url}"))]
+    TimestampCouldNotBeParsed { url: String },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -20,15 +40,9 @@ pub struct SlackUrl {
 }
 
 impl SlackUrl {
-    pub fn new(url_string: &str) -> Result<SlackUrl, SlackError> {
+    pub fn new(url_string: &str) -> Result<SlackUrl> {
         m! {
-            url <- url::Url::from_str(url_string).map_err(|parse_err| SlackError::SlackUrl(SlackUrlError::UrlParse(
-                format!(
-                    "There was an issue parsing the following slack url: {}",
-                    url_string
-                ),
-                parse_err,
-            )));
+            url <- url::Url::from_str(url_string).context(UrlCrateCouldNotParseSnafu { url: url_string});
             path_segments <- SlackUrl::parse_path_segments(&url);
             channel_id <- SlackUrl::parse_channel_id(&path_segments);
             ts <- SlackUrl::parse_ts(&url, &path_segments);
@@ -43,46 +57,48 @@ impl SlackUrl {
         }
     }
 
-    fn parse_path_segments(url: &url::Url) -> Result<Vec<String>, SlackError> {
-        match url.path_segments() {
-            Some(segments) => Ok(segments
-                .collect::<Vec<&str>>()
-                .into_iter()
-                .map(String::from)
-                .collect::<Vec<String>>()),
-            None => Err(SlackError::SlackUrl(SlackUrlError::PathSegmentsNotFound(
-                format!("No path segments found for url: {}", url),
-            ))),
-        }
+    fn parse_path_segments(url: &url::Url) -> Result<Vec<String>> {
+        url.path_segments().map_or(
+            PathSegmentsNotFoundSnafu { url: url.as_str() }.fail(),
+            |segments| {
+                Ok(segments
+                    .collect::<Vec<&str>>()
+                    .into_iter()
+                    .map(String::from)
+                    .collect::<Vec<String>>())
+            },
+        )
     }
 
-    fn parse_channel_id(path_segments: &Vec<String>) -> Result<String, SlackError> {
+    fn parse_channel_id(path_segments: &Vec<String>) -> Result<String> {
         // channel id can be prefixed with 'C', 'D', or 'G'. See https://api.slack.com/docs/conversations-api#shared_channels
-        match path_segments
+        path_segments
             .iter()
             .find(|segment| {
                 segment.starts_with('C') || segment.starts_with('D') || segment.starts_with('G')
-            }) {
-                Some(found) => Ok(found.to_string()),
-                None => Err(SlackError::SlackUrl(SlackUrlError::ChannelIdNotFound(format!("No channel ID found. Channel id must start with 'C', 'D', or 'G'. path segments: {:#?}", path_segments))))
-            }
+            })
+            .map_or(
+                ChannelIdNotFoundInPathSegmentsSnafu {
+                    path_segments: format!("{:#?}", path_segments),
+                }
+                .fail(),
+                |found| Ok(found.to_string()),
+            )
     }
 
-    fn parse_ts(url: &url::Url, path_segments: &Vec<String>) -> Result<String, SlackError> {
-        match path_segments
+    fn parse_ts(url: &url::Url, path_segments: &Vec<String>) -> Result<String> {
+        path_segments
             .iter()
             .find(|segment| segment.starts_with('p'))
-        {
-            Some(segment) => match segment.split_terminator('p').last() {
-                Some(item) => Ok(item.split_at(10).to_vec().join(".")),
-                None => Err(SlackError::SlackUrl(SlackUrlError::ParseTimestamp(
-                    format!("url= {}. path segments= {:#?}", url, path_segments),
-                ))),
-            },
-            None => Err(SlackError::SlackUrl(SlackUrlError::TimestampNotFound(
-                format!("url= {}. path segments= {:#?}", url, path_segments),
-            ))),
-        }
+            .map_or(
+                TimestampNotFoundSnafu { url: url.as_str() }.fail(),
+                |segment| {
+                    segment.split_terminator('p').last().map_or(
+                        TimestampCouldNotBeParsedSnafu { url: url.as_str() }.fail(),
+                        |item| Ok(item.split_at(10).to_vec().join(".")),
+                    )
+                },
+            )
     }
 
     fn parse_thread_ts(url: &url::Url) -> Option<String> {

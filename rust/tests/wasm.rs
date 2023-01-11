@@ -10,7 +10,8 @@ use obsidian_slack::{
 };
 use test_case::test_case;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-use wasm_bindgen_test::*;
+use wasm_bindgen_test::{*, console_log};
+
 
 fn get_mock_request_function(
     message_response: MessageResponse,
@@ -589,6 +590,7 @@ async fn get_slack_message_returns_data_correctly(
     )
     .await;
 
+    console_log!("Result: {:#?}", result);
     assert!(!result.is_string(), "Result was a string: {:#?}", result);
 
     let result: ObsidianSlackReturnData = serde_wasm_bindgen::from_value(result).expect("Should parse return object");
@@ -609,7 +611,8 @@ async fn get_slack_message_returns_data_correctly(
         get_channel_info: false,
         get_attachments: false,
         get_team_info: false,
-    }
+    },
+    "InvalidSlackApiToken"
     ; "bad api token"
 )]
 #[test_case(
@@ -624,7 +627,8 @@ async fn get_slack_message_returns_data_correctly(
         get_channel_info: false,
         get_attachments: false,
         get_team_info: false,
-    }
+    },
+    "InvalidSlackApiCookie"
     ; "bad cookie"
 )]
 #[test_case(
@@ -639,7 +643,8 @@ async fn get_slack_message_returns_data_correctly(
         get_channel_info: false,
         get_attachments: false,
         get_team_info: false,
-    }
+    },
+    "ChannelIdNotFoundInPathSegments"
     ; "bad channel_id"
 )]
 #[test_case(
@@ -654,7 +659,8 @@ async fn get_slack_message_returns_data_correctly(
         get_channel_info: false,
         get_attachments: false,
         get_team_info: false,
-    }
+    },
+    "TimestampNotFound"
     ; "bad ts"
 )]
 #[test_case(
@@ -676,7 +682,8 @@ async fn get_slack_message_returns_data_correctly(
         get_channel_info: false,
         get_attachments: false,
         get_team_info: false,
-    }
+    },
+    "InvalidMessageResponse"
     ; "message response not ok - no flags"
 )]
 #[test_case(
@@ -712,8 +719,9 @@ async fn get_slack_message_returns_data_correctly(
         get_channel_info: false,
         get_attachments: false,
         get_team_info: false,
-    }
-    ; "message response not ok - user flag"
+    },
+    "InvalidUserResponse"
+    ; "user response not ok - user flag"
 )]
 #[wasm_bindgen_test]
 async fn get_slack_message_returns_error_messages_correctly(
@@ -723,6 +731,7 @@ async fn get_slack_message_returns_error_messages_correctly(
     cookie: String,
     url: String,
     feature_flags: SlackHttpClientConfigFeatureFlags,
+    expected_error: &str
 ) {
     let feature_flags = serde_wasm_bindgen::to_value(&feature_flags)
     .unwrap();
@@ -769,5 +778,7 @@ async fn get_slack_message_returns_error_messages_correctly(
     )
     .await;
 
+    console_log!("Result: {:#?}", result);
     assert!(result.is_string(), "Result was not a string: {:#?}", result);
+    assert!(result.as_string().unwrap().contains(expected_error))
 }

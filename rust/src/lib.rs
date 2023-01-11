@@ -5,8 +5,8 @@
 //! This is possible by using Slack's web interface's 'xoxc' token and
 //! corresponding 'xoxd' cookie.
 
-mod errors;
 pub mod messages;
+mod response;
 pub mod slack_http_client;
 mod slack_url;
 pub mod users;
@@ -14,13 +14,13 @@ mod utils;
 
 use derive_builder::Builder;
 use do_notation::m;
-use errors::SlackError;
 use js_sys::{JsString, Promise, JSON};
 use messages::Message;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::Serializer;
 use slack_http_client::SlackHttpClientConfigFeatureFlags;
 use slack_url::SlackUrl;
+use snafu::{ResultExt, Snafu};
 use std::{collections::HashMap, path::Path, str::FromStr};
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
@@ -31,6 +31,37 @@ use crate::{
     users::User,
     utils::create_file_name,
 };
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("When mapping user ids from response to retrieved user info, user id was not in user map. user_id: {user_id} - user_map: {user_map}"))]
+    UserIdNotFoundInUserMap { user_id: String, user_map: String },
+
+    #[snafu(display(
+        "Could not parse feature flags js value to a feature flags rust object: {feature_flags} - source: {source}"
+    ))]
+    CouldNotParseFeatureFlags {
+        feature_flags: String,
+        source: serde_wasm_bindgen::Error,
+    },
+
+    #[snafu(display("Could not create slack http client config - source: {source}"))]
+    ErrorCreatingSlackHttpClientConfig { source: slack_http_client::Error },
+
+    #[snafu(display("Could not create slack url - source: {source}"))]
+    ErrorCreatingSlackUrl { source: slack_url::Error },
+
+    #[snafu(display("Could not get messages from api - source: {source}"))]
+    CouldNotGetMessagesFromApi { source: messages::Error },
+
+    #[snafu(display("Could not get users from api - source: {source}"))]
+    CouldNotGetUsersFromApi { source: users::Error },
+
+    #[snafu(display("Could not get users from messages - source: {source}"))]
+    CouldNotGetUsersFromMessages { source: messages::Error },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq)]
 pub struct ObsidianSlackReturnData {
@@ -46,10 +77,10 @@ pub struct MessageAndThreadToSave {
 }
 
 impl MessageAndThreadToSave {
-    fn from_components(
-        message_and_thread: &MessageAndThread,
-        users: Option<&HashMap<String, User>>,
-    ) -> Result<MessageAndThreadToSave, SlackError> {
+    fn from_components<'a>(
+        message_and_thread: &'a MessageAndThread,
+        users: Option<&'a HashMap<String, User>>,
+    ) -> Result<MessageAndThreadToSave> {
         let message_messages = message_and_thread
             .message
             .messages
@@ -57,7 +88,7 @@ impl MessageAndThreadToSave {
             .expect("Expected messages to unwrap, no messages found for main message")
             .iter()
             .map(|message| MessageToSave::from_components(message, users))
-            .collect::<Result<Vec<MessageToSave>, SlackError>>()?;
+            .collect::<Result<Vec<MessageToSave>>>()?;
 
         let thread_messages = message_and_thread
             .thread
@@ -66,7 +97,7 @@ impl MessageAndThreadToSave {
             .expect("Expected messages to unwrap, no messages found for thread")
             .iter()
             .map(|message| MessageToSave::from_components(message, users))
-            .collect::<Result<Vec<MessageToSave>, SlackError>>()?;
+            .collect::<Result<Vec<MessageToSave>>>()?;
 
         Ok(MessageAndThreadToSaveBuilder::default()
             .thread(thread_messages)
@@ -90,25 +121,34 @@ pub struct MessageToSave {
 }
 
 impl MessageToSave {
-    fn from_components(
-        message: &Message,
-        users: Option<&HashMap<String, User>>,
-    ) -> Result<MessageToSave, SlackError> {
+    fn from_components<'a>(
+        message: &'a Message,
+        users: Option<&'a HashMap<String, User>>,
+    ) -> Result<MessageToSave> {
         match users {
-            Some(users) => match users.get(message.user.as_ref().unwrap()) {
-                Some(user) => Ok(MessageToSaveBuilder::default()
-                    .r#type(message.r#type.clone())
-                    .user_id(Some(message.user.as_ref().unwrap().to_string()))
-                    .user(Some(user.to_owned()))
-                    .text(message.text.clone())
-                    .thread_ts(message.thread_ts.clone())
-                    .reply_count(message.reply_count)
-                    .team(message.team.clone())
-                    .ts(message.ts.clone())
-                    .build()
-                    .unwrap()),
-                None => Err(SlackError::MissingUsers),
-            },
+            Some(users) => {
+                let user_id = message.user.as_ref().unwrap();
+                users.get(user_id).map_or(
+                    UserIdNotFoundInUserMapSnafu {
+                        user_id,
+                        user_map: format!("{:#?}", users),
+                    }
+                    .fail(),
+                    |user| {
+                        Ok(MessageToSaveBuilder::default()
+                            .r#type(message.r#type.clone())
+                            .user_id(Some(message.user.as_ref().unwrap().to_string()))
+                            .user(Some(user.to_owned()))
+                            .text(message.text.clone())
+                            .thread_ts(message.thread_ts.clone())
+                            .reply_count(message.reply_count)
+                            .team(message.team.clone())
+                            .ts(message.ts.clone())
+                            .build()
+                            .unwrap())
+                    },
+                )
+            }
             None => Ok(MessageToSaveBuilder::default()
                 .r#type(message.r#type.clone())
                 .user_id(Some(message.user.as_ref().unwrap().to_string()))
@@ -193,7 +233,11 @@ pub async fn get_slack_message(
     }
     .map_or_else(
         |err| {
-            let message = format!("There was a problem getting slack messages. Error: {}", err);
+            let message = format!(
+                "There was a problem getting slack messages. Error message: {} - Error struct: {:#?}",
+                &err,
+                &err
+            );
             log::error!("{}", &message);
             JsValue::from_str(&message)
         },
@@ -214,35 +258,44 @@ fn curry_request_func(
     })
 }
 
+// trying to wrap this up to see what the std_out from error tests are
+// if they show enum variant, match on enum variant in returned string for thsoe tests
+// if not, add enum variant as string into error enum variant display traits
 async fn get_results_from_api(
     api_token: String,
     cookie: String,
     url: String,
     feature_flags: JsValue,
     request_func: JsValue,
-) -> Result<(MessageAndThreadToSave, SlackUrl), errors::SlackError> {
+) -> Result<(MessageAndThreadToSave, SlackUrl)> {
     // separate calls for intermediate results due to `and_then` closures not allowing await
     let make_request = curry_request_func(js_sys::Function::from(request_func));
+    let feature_flags_string = format!("{:#?}", feature_flags);
 
     let (client, slack_url) = m! {
-        feature_flags <- serde_wasm_bindgen::from_value(feature_flags).map_err(errors::SlackError::SerdeWasmBindgen);
-        let _ = log::info!("{:#?}", feature_flags);
+        feature_flags <- serde_wasm_bindgen::from_value(feature_flags).context(CouldNotParseFeatureFlagsSnafu {feature_flags: feature_flags_string});
         config <- SlackHttpClientConfig::new(
                 get_api_base(),
                 api_token.to_string(),
                 cookie.to_string(),
                 feature_flags,
-            );
-        slack_url <- SlackUrl::new(&url);
+            ).context(ErrorCreatingSlackHttpClientConfigSnafu);
+        slack_url <- SlackUrl::new(&url).context(ErrorCreatingSlackUrlSnafu);
         let client = SlackHttpClient::<Promise>::new(config, make_request);
         return (client, slack_url);
     }?;
 
-    let messages = messages::get_messages_from_api(&client, &slack_url).await?;
+    let messages = messages::get_messages_from_api(&client, &slack_url)
+        .await
+        .context(CouldNotGetMessagesFromApiSnafu)?;
 
     let users = if client.config.feature_flags.get_users {
-        let user_ids = messages.collect_users()?;
-        let users = users::get_users_from_api(&user_ids, &client).await?;
+        let user_ids = messages
+            .collect_users()
+            .context(CouldNotGetUsersFromMessagesSnafu)?;
+        let users = users::get_users_from_api(&user_ids, &client)
+            .await
+            .context(CouldNotGetUsersFromApiSnafu)?;
         Some(users)
     } else {
         None

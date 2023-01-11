@@ -1,17 +1,42 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::format};
 
+use do_notation::m;
 use js_sys::Promise;
 use serde::{Deserialize, Serialize};
+use snafu::{ResultExt, Snafu};
 use wasm_bindgen::JsValue;
 
 use crate::{
-    errors::{self, SlackError},
-    slack_http_client::{
-        get_api_base, SlackHttpClient, SlackHttpClientConfig, SlackResponseValidator,
-    },
+    response::{self, convert_result_string_to_object, SlackResponseValidator},
+    slack_http_client::{self, get_api_base, SlackHttpClient, SlackHttpClientConfig},
     slack_url::SlackUrl,
-    utils::convert_result_string_to_object,
+    users::User,
 };
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Awaiting a JsFuture returned an error: {error}"))]
+    WasmErrorFromJsFuture { error: String },
+
+    #[snafu(display("The message response was not ok. - source: {source}"))]
+    InvalidMessageResponse { source: response::Error },
+
+    #[snafu(display("{source}"))]
+    CouldNotParseJsonFromMessageResponse { source: response::Error },
+
+    #[snafu(display(
+        "Attempted to retrieve the user id for the message, but found none: {message}"
+    ))]
+    UserIdWasNoneInMessage { message: String },
+
+    #[snafu(display("Attempted to access messages in message response, but no messages found: {message_response}"))]
+    MessagesNotFoundInMessageResponse { message_response: String },
+
+    #[snafu(display("{source}"))]
+    SerdeWasmBindgenCouldNotParseMessageResponse { source: response::Error },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MessageAndThread {
@@ -20,16 +45,22 @@ pub struct MessageAndThread {
 }
 
 impl MessageAndThread {
-    pub fn collect_users(&self) -> Result<HashSet<String>, SlackError> {
-        match self.message.collect_users().and_then(|mut message_users| {
-            self.thread.collect_users().map(|thread_users| {
-                message_users.extend(thread_users);
-                message_users
+    pub fn collect_users(&self) -> Result<HashSet<String>> {
+        self.message
+            .collect_users()
+            .and_then(|mut message_users| {
+                self.thread.collect_users().map(|thread_users| {
+                    message_users.extend(thread_users);
+                    message_users
+                })
             })
-        }) {
-            Some(user_ids) => Ok(user_ids.into_iter().collect()),
-            None => Err(errors::SlackError::MissingUsers),
-        }
+            .map_or(
+                UserIdWasNoneInMessageSnafu {
+                    message: format!("{:#?}", self.message),
+                }
+                .fail(),
+                |user_ids| Ok(user_ids.into_iter().collect()),
+            )
     }
 }
 
@@ -60,22 +91,6 @@ pub struct MessageResponse {
 }
 
 impl MessageResponse {
-    fn defined_from_js_object(val: JsValue) -> Result<MessageResponse, SlackError> {
-        if val.is_object() {
-            serde_wasm_bindgen::from_value(val)
-                .map_err(errors::SlackError::SerdeWasmBindgen)
-                .map(|mut val: MessageResponse| {
-                    val.is_null = Some(false);
-                    val
-                })
-        } else {
-            Err(errors::SlackError::JsValueNotObject(format!(
-                "value was not a javascript object. got {:#?} instead",
-                val.js_typeof()
-            )))
-        }
-    }
-
     fn copy_from_existing_given_seed_ts(&self, seed_ts: &str) -> MessageResponse {
         let mut copy = self.to_owned();
         copy.messages = Some(
@@ -88,13 +103,27 @@ impl MessageResponse {
         copy
     }
 
-    pub fn collect_users(&self) -> Option<Vec<String>> {
-        self.messages.as_ref().map(|messages| {
-            messages
-                .iter()
-                .map(|message| message.user.as_ref().unwrap().to_string())
-                .collect()
-        })
+    pub fn collect_users(&self) -> Result<Vec<String>> {
+        self.messages.as_ref().map_or(
+            MessagesNotFoundInMessageResponseSnafu {
+                message_response: format!("{:#?}", &self),
+            }
+            .fail(),
+            |messages| {
+                messages
+                    .iter()
+                    .map(|message| {
+                        message.user.as_ref().map_or(
+                            UserIdWasNoneInMessageSnafu {
+                                message: format!("{:#?}", message),
+                            }
+                            .fail(),
+                            |user| Ok(user.to_string()),
+                        )
+                    })
+                    .collect::<Result<Vec<String>>>()
+            },
+        )
     }
 }
 
@@ -107,7 +136,7 @@ impl SlackResponseValidator for MessageResponse {
 pub async fn get_messages_from_api<T>(
     client: &SlackHttpClient<T>,
     slack_url: &SlackUrl,
-) -> Result<MessageAndThread, SlackError>
+) -> Result<MessageAndThread>
 where
     wasm_bindgen_futures::JsFuture: std::convert::From<T>,
 {
@@ -115,20 +144,27 @@ where
         Some(thread_ts) => thread_ts,
         None => slack_url.clone().ts,
     };
-    wasm_bindgen_futures::JsFuture::from(
+
+    let awaited_val = wasm_bindgen_futures::JsFuture::from(
         client.get_conversation_replies(&slack_url.channel_id, &thread_ts),
     )
     .await
-    .map_err(errors::SlackError::Js)
-    .and_then(convert_result_string_to_object)
-    .and_then(MessageResponse::defined_from_js_object)
-    .and_then(MessageResponse::validate_response)
-    .map(|response| {
-        let copy = MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
+    // mapping error instead of using snafu context because jsvalue is not an Error from parse method
+    .map_err(|err| Error::WasmErrorFromJsFuture {
+        error: format!("{:#?}", err),
+    });
 
-        MessageAndThread {
-            message: copy,
-            thread: response,
-        }
+    let response = m! {
+        awaited_val <- awaited_val;
+        js_obj <- convert_result_string_to_object(awaited_val).context(CouldNotParseJsonFromMessageResponseSnafu);
+        message_response <- response::defined_from_js_object(js_obj).context(SerdeWasmBindgenCouldNotParseMessageResponseSnafu);
+        valid_response <- MessageResponse::validate_response(message_response).context(InvalidMessageResponseSnafu);
+        return valid_response;
+    }?;
+    let copy = MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
+
+    Ok(MessageAndThread {
+        message: copy,
+        thread: response,
     })
 }
