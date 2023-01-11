@@ -1,18 +1,14 @@
-use std::collections::{HashMap, HashSet};
-
 use amplify_derive::Display;
 use do_notation::m;
 use futures::future::join_all;
-use js_sys::Promise;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
+use std::collections::{HashMap, HashSet};
 use wasm_bindgen_futures::JsFuture;
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
-    slack_http_client::{
-        self, get_api_base, RequestUrlParam, SlackHttpClient, SlackHttpClientConfig,
-    },
+    slack_http_client::SlackHttpClient,
 };
 
 #[derive(Debug, Snafu)]
@@ -32,7 +28,7 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
 #[display(Debug)]
 pub struct User {
     pub id: String,

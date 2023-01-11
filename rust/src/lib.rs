@@ -12,25 +12,23 @@ mod slack_url;
 pub mod users;
 mod utils;
 
-use derive_builder::Builder;
-use do_notation::m;
-use js_sys::{JsString, Promise, JSON};
-use messages::Message;
-use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::Serializer;
-use slack_http_client::SlackHttpClientConfigFeatureFlags;
-use slack_url::SlackUrl;
-use snafu::{ResultExt, Snafu};
-use std::{collections::HashMap, path::Path, str::FromStr};
-use utils::set_panic_hook;
-use wasm_bindgen::prelude::*;
-
 use crate::{
     messages::MessageAndThread,
     slack_http_client::{get_api_base, RequestUrlParam, SlackHttpClient, SlackHttpClientConfig},
     users::User,
     utils::create_file_name,
 };
+use derive_builder::Builder;
+use do_notation::m;
+use js_sys::Promise;
+use messages::Message;
+use serde::{Deserialize, Serialize};
+use serde_wasm_bindgen::Serializer;
+use slack_url::SlackUrl;
+use snafu::{ResultExt, Snafu};
+use std::{collections::HashMap, str::FromStr};
+use utils::set_panic_hook;
+use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -63,12 +61,12 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq, Eq)]
 pub struct ObsidianSlackReturnData {
     pub message_and_thread: MessageAndThreadToSave,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq, Eq, Default)]
 #[builder(default)]
 pub struct MessageAndThreadToSave {
     pub message: Vec<MessageToSave>,
@@ -107,7 +105,7 @@ impl MessageAndThreadToSave {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Builder, PartialEq, Eq, Default)]
 #[builder(default)]
 pub struct MessageToSave {
     pub r#type: Option<String>,

@@ -59,7 +59,7 @@ pub fn convert_result_string_to_object(val: JsValue) -> Result<JsValue> {
                    .as_string()
                    .map_or(JsValueNotAStringSnafu {js_value: format!("{:#?}", val)}.fail(), Ok);
         // mapping error instead of using snafu context because jsvalue is not an Error from parse method
-        obj_val <- JSON::parse(&str_val).map_err(|err| Error::CouldNotParseJsonFromString {string: format!("{:#?}", str_val)});
+        obj_val <- JSON::parse(&str_val).map_err(|_err| Error::CouldNotParseJsonFromString {string: format!("{:#?}", str_val)});
         return obj_val;
     }
 }

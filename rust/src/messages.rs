@@ -1,16 +1,12 @@
-use std::{collections::HashSet, fmt::format};
-
 use do_notation::m;
-use js_sys::Promise;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use wasm_bindgen::JsValue;
+use std::collections::HashSet;
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
-    slack_http_client::{self, get_api_base, SlackHttpClient, SlackHttpClientConfig},
+    slack_http_client::SlackHttpClient,
     slack_url::SlackUrl,
-    users::User,
 };
 
 #[derive(Debug, Snafu)]

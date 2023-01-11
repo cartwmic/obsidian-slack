@@ -1,12 +1,9 @@
 use amplify_derive::Display;
 use derive_builder::Builder;
-use do_notation::m;
-use js_sys::JSON;
 use serde::{Deserialize, Serialize};
-use snafu::{ensure, ResultExt, Snafu};
-use std::{borrow::Borrow, collections::HashMap, fmt::Display, str::FromStr};
+use snafu::{ensure, Snafu};
+use std::{borrow::Borrow, collections::HashMap, str::FromStr};
 use url::Url;
-use wasm_bindgen::JsValue;
 
 #[derive(Debug, Snafu)]
 pub enum Error {

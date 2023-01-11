@@ -1,11 +1,9 @@
-use std::{path, str::FromStr};
-
+use crate::slack_http_client::SlackApiQueryParams;
 use do_notation::m;
 use snafu::{ResultExt, Snafu};
+use std::str::FromStr;
 use tuple_conv::RepeatedTuple;
-use url::{ParseError, Url};
-
-use crate::slack_http_client::SlackApiQueryParams;
+use url::ParseError;
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -86,7 +84,7 @@ impl SlackUrl {
             )
     }
 
-    fn parse_ts(url: &url::Url, path_segments: &Vec<String>) -> Result<String> {
+    fn parse_ts(url: &url::Url, path_segments: &[String]) -> Result<String> {
         path_segments
             .iter()
             .find(|segment| segment.starts_with('p'))

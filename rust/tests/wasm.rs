@@ -1,15 +1,15 @@
-use std::{ops::Deref};
+
 
 use js_sys::JSON;
 use obsidian_slack::{
     get_slack_message,
     ObsidianSlackReturnData,
     messages::{Message, MessageResponse},
-    slack_http_client::{RequestUrlParam, SlackHttpClientConfigFeatureFlags},
+    slack_http_client::{SlackHttpClientConfigFeatureFlags},
     users::{User, UserResponse}, MessageAndThreadToSave, MessageToSave,
 };
 use test_case::test_case;
-use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+use wasm_bindgen::{JsValue};
 use wasm_bindgen_test::{*, console_log};
 
 

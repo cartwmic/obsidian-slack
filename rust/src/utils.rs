@@ -1,12 +1,5 @@
+use crate::slack_url::SlackUrl;
 use std::collections::HashSet;
-
-use do_notation::m;
-use js_sys::{Promise, JSON};
-use serde::Serialize;
-use serde_wasm_bindgen::Serializer;
-use wasm_bindgen::JsValue;
-
-use crate::{slack_http_client::RequestUrlParam, slack_url::SlackUrl};
 
 pub fn set_panic_hook() {
     // When the `console_error_panic_hook` feature is enabled, we can call the
