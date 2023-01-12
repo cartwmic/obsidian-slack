@@ -136,7 +136,10 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
     {
         let mut request_url = self.config.api_base.clone();
 
-        request_url.path_segments_mut().unwrap().push(endpoint);
+        request_url
+            .path_segments_mut()
+            .expect("Expected a url that can be a base and has path segments, but did not get that. This is a bug")
+            .push(endpoint);
 
         request_url
             .query_pairs_mut()

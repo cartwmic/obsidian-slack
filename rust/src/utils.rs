@@ -1,5 +1,9 @@
-use crate::slack_url::SlackUrl;
+use crate::{slack_http_client::RequestUrlParam, slack_url::SlackUrl};
+use js_sys::Promise;
+use serde::Serialize;
+use serde_wasm_bindgen::Serializer;
 use std::collections::HashSet;
+use wasm_bindgen::JsValue;
 
 pub fn set_panic_hook() {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -31,4 +35,24 @@ pub fn create_file_name(slack_url: &SlackUrl) -> String {
     items.extend(other_items);
     // .collect::<Vec<String>>()
     items.join("-") + ".json"
+}
+
+pub fn curry_request_func(
+    request_func: js_sys::Function,
+) -> Box<dyn Fn(RequestUrlParam) -> Promise> {
+    Box::new(move |params: RequestUrlParam| -> Promise {
+        let serializer = Serializer::json_compatible();
+        js_sys::Promise::from(
+            request_func
+                .call1(
+                    &JsValue::NULL,
+                    &params
+                        .serialize(&serializer)
+                        .expect("Expected to serialize params, but was unable to. This is a bug"),
+                )
+                .expect(
+                    "Expected to create a js promise in rust, but was unable too. This is a bug",
+                ),
+        )
+    })
 }

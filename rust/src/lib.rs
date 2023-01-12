@@ -23,11 +23,10 @@ use do_notation::m;
 use js_sys::Promise;
 use messages::Message;
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::Serializer;
 use slack_url::SlackUrl;
 use snafu::{ResultExt, Snafu};
 use std::{collections::HashMap, str::FromStr};
-use utils::set_panic_hook;
+use utils::{curry_request_func, set_panic_hook};
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Snafu)]
@@ -125,7 +124,10 @@ impl MessageToSave {
     ) -> Result<MessageToSave> {
         match users {
             Some(users) => {
-                let user_id = message.user.as_ref().unwrap();
+                let user_id = message
+                    .user
+                    .as_ref()
+                    .expect("expected a user id, got None. This should never happen");
                 users.get(user_id).map_or(
                     UserIdNotFoundInUserMapSnafu {
                         user_id,
@@ -135,7 +137,15 @@ impl MessageToSave {
                     |user| {
                         Ok(MessageToSaveBuilder::default()
                             .r#type(message.r#type.clone())
-                            .user_id(Some(message.user.as_ref().unwrap().to_string()))
+                            .user_id(Some(
+                                message
+                                    .user
+                                    .as_ref()
+                                    .expect(
+                                        "expected a user id, got None. This should never happen",
+                                    )
+                                    .to_string(),
+                            ))
                             .user(Some(user.to_owned()))
                             .text(message.text.clone())
                             .thread_ts(message.thread_ts.clone())
@@ -149,7 +159,13 @@ impl MessageToSave {
             }
             None => Ok(MessageToSaveBuilder::default()
                 .r#type(message.r#type.clone())
-                .user_id(Some(message.user.as_ref().unwrap().to_string()))
+                .user_id(Some(
+                    message
+                        .user
+                        .as_ref()
+                        .expect("expected a user id, got None. This should never happen")
+                        .to_string(),
+                ))
                 .text(message.text.clone())
                 .thread_ts(message.thread_ts.clone())
                 .reply_count(message.reply_count)
@@ -239,26 +255,10 @@ pub async fn get_slack_message(
             log::error!("{}", &message);
             JsValue::from_str(&message)
         },
-        |buffer| serde_wasm_bindgen::to_value(&buffer).unwrap(),
+        |buffer| serde_wasm_bindgen::to_value(&buffer).expect("Expected to serialize object with serde, but was unable to. This is a bug"),
     )
 }
 
-fn curry_request_func(
-    request_func: js_sys::Function,
-) -> Box<dyn Fn(slack_http_client::RequestUrlParam) -> js_sys::Promise> {
-    Box::new(move |params: RequestUrlParam| -> Promise {
-        let serializer = Serializer::json_compatible();
-        js_sys::Promise::from(
-            request_func
-                .call1(&JsValue::NULL, &params.serialize(&serializer).unwrap())
-                .unwrap(),
-        )
-    })
-}
-
-// trying to wrap this up to see what the std_out from error tests are
-// if they show enum variant, match on enum variant in returned string for thsoe tests
-// if not, add enum variant as string into error enum variant display traits
 async fn get_results_from_api(
     api_token: String,
     cookie: String,

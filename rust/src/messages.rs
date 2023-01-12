@@ -89,13 +89,18 @@ pub struct MessageResponse {
 impl MessageResponse {
     fn copy_from_existing_given_seed_ts(&self, seed_ts: &str) -> MessageResponse {
         let mut copy = self.to_owned();
-        copy.messages = Some(
-            copy.messages
-                .unwrap()
-                .into_iter()
-                .filter(|message| message.ts.as_ref().unwrap() == seed_ts)
-                .collect(),
-        );
+        copy.messages =
+            Some(
+                copy.messages
+                    .expect("Expected messages to work on, got None. This is a bug")
+                    .into_iter()
+                    .filter(|message| {
+                        message.ts.as_ref().expect(
+                            "Expected message to have a timestamp, but got None. This is a bug",
+                        ) == seed_ts
+                    })
+                    .collect(),
+            );
         copy
     }
 
@@ -136,27 +141,24 @@ pub async fn get_messages_from_api<T>(
 where
     wasm_bindgen_futures::JsFuture: std::convert::From<T>,
 {
-    let thread_ts = match slack_url.thread_ts.clone() {
-        Some(thread_ts) => thread_ts,
-        None => slack_url.clone().ts,
-    };
+    let thread_ts = slack_url.thread_ts.as_ref().unwrap_or(&slack_url.ts);
 
     let awaited_val = wasm_bindgen_futures::JsFuture::from(
-        client.get_conversation_replies(&slack_url.channel_id, &thread_ts),
+        client.get_conversation_replies(&slack_url.channel_id, thread_ts),
     )
     .await
     // mapping error instead of using snafu context because jsvalue is not an Error from parse method
     .map_err(|err| Error::WasmErrorFromJsFuture {
         error: format!("{:#?}", err),
-    });
+    })?;
 
     let response = m! {
-        awaited_val <- awaited_val;
         js_obj <- convert_result_string_to_object(awaited_val).context(CouldNotParseJsonFromMessageResponseSnafu);
         message_response <- response::defined_from_js_object(js_obj).context(SerdeWasmBindgenCouldNotParseMessageResponseSnafu);
         valid_response <- MessageResponse::validate_response(message_response).context(InvalidMessageResponseSnafu);
         return valid_response;
     }?;
+
     let copy = MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
 
     Ok(MessageAndThread {

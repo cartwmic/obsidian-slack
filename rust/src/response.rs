@@ -43,7 +43,9 @@ pub trait SlackResponseValidator {
         Self: std::fmt::Debug,
     {
         ensure!(
-            self.ok().unwrap(),
+            self.ok().expect(
+                "Expected ok field to have a value in the response, but got None. This is a bug"
+            ),
             SlackResponseNotOkSnafu {
                 response: format!("{:#?}", self),
             }

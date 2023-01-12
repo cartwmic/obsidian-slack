@@ -82,10 +82,10 @@ where
     Ok(user_ids
         .iter()
         .map(String::to_string)
-        .zip(
-            user_responses
-                .into_iter()
-                .map(|user_response| user_response.user.unwrap()),
-        )
+        .zip(user_responses.into_iter().map(|user_response| {
+            user_response
+                .user
+                .expect("Expected a user in the user response, but got None. This is a bug")
+        }))
         .collect::<HashMap<String, User>>())
 }
