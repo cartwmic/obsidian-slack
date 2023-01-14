@@ -14,7 +14,7 @@ mod utils;
 
 use crate::{
     messages::MessageAndThread,
-    slack_http_client::{get_api_base, RequestUrlParam, SlackHttpClient, SlackHttpClientConfig},
+    slack_http_client::{get_api_base, SlackHttpClient, SlackHttpClientConfig},
     users::User,
     utils::create_file_name,
 };

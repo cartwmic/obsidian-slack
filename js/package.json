@@ -4,7 +4,8 @@
   "description": "This is a plugin for downloading slack messages to your obsidian vault",
   "main": "index.ts",
   "scripts": {
-    "build": "rollup --watch --config rollup.config.js",
+    "test": "npx jest",
+    "dev": "rollup --watch --config rollup.config.js",
     "version": "node version-bump.mjs"
   },
   "keywords": [
@@ -21,12 +22,18 @@
   "devDependencies": {
     "@rollup/plugin-commonjs": "^15.1.0",
     "@rollup/plugin-node-resolve": "^9.0.0",
+    "@types/jest": "^29.2.5",
     "@types/node": "^16.11.6",
     "@typescript-eslint/eslint-plugin": "5.29.0",
     "@typescript-eslint/parser": "5.29.0",
     "@wasm-tool/rollup-plugin-rust": "^2.3.2",
+    "jest": "^29.3.1",
+    "jest-environment-jsdom": "^29.3.1",
+    "obsidian": "latest",
     "rollup": "^2.32.1",
+    "rollup-jest": "^3.1.0",
     "rollup-plugin-typescript2": "^0.34.1",
+    "ts-jest": "^29.0.5",
     "ts-loader": "^9.4.2",
     "tslib": "^2.4.1",
     "typescript": "^4.9.4"
