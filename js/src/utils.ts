@@ -22,10 +22,10 @@ export const DEFAULT_SETTINGS: ObsidianSlackPluginSettings = {
 }
 
 
-export async function process_result(result: any, notice_func: (message: string) => void, vault: Vault, alert_func: (message: string) => void) {
+export async function process_result(result: any, vault: Vault) {
     try {
         if (typeof (result) === "string") {
-            alert_func(result)
+            alert(result)
             result = null;
         }
 
@@ -37,13 +37,13 @@ export async function process_result(result: any, notice_func: (message: string)
         if (file_saved) {
             await navigator.clipboard.writeText(result.message_and_thread.file_name);
             let message = "Successfully downloaded slack message and saved to attachment folder. File name saved to clipboard";
-            notice_func(message);
+            new Notice(message);
         }
     }
     catch (e) {
         let message = "There was a problem saving message results: " + e;
         console.log(message);
-        alert_func(message);
+        alert(message);
     }
 
 }
@@ -56,7 +56,7 @@ export async function save_result(result: any, vault: Vault): Promise<boolean> {
 
 }
 
-export async function get_slack_message_modal_on_close_helper(api_token: string | null, cookie: string | null, url: string, get_slack_message_func: (apiToken: string, cookie: string, url: string, feature_flags: any, request_func: (params: RequestUrlParam) => Promise<string>) => any, settings: ObsidianSlackPluginSettings, vault: Vault, alert_func: (message: string) => void): Promise<any> {
+export async function get_slack_message_modal_on_close_helper(api_token: string | null, cookie: string | null, url: string, get_slack_message_func: (apiToken: string, cookie: string, url: string, feature_flags: any, request_func: (params: RequestUrlParam) => Promise<string>) => any, settings: ObsidianSlackPluginSettings, vault: Vault): Promise<any> {
     if (api_token && cookie) {
         // do nothing on empty url
         if (url) {
@@ -68,10 +68,10 @@ export async function get_slack_message_modal_on_close_helper(api_token: string 
                 "get_team_info": this.plugin.settings.get_team_info,
             }, request);
 
-            process_result(result, (message: string) => { new Notice(message, 5000) }, vault, alert_func);
+            process_result(result, vault);
         }
     }
     else {
-        alert_func("apiToken or cookie or url was null, undefined, or empty. Aborting operation")
+        alert("apiToken or cookie or url was null, undefined, or empty. Aborting operation");
     }
 }

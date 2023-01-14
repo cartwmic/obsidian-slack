@@ -66,6 +66,4 @@ export class Vault {
     }
 }
 
-export default {
-    Vault
-}
+export const Notice = jest.fn((msg: string) => { console.log("in the file") })

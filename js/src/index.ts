@@ -77,7 +77,7 @@ export class GetSlackMessageModal extends Modal {
 		const { contentEl } = this;
 		var apiToken = this.plugin.localStorage.getApiToken();
 		var cookie = this.plugin.localStorage.getCookie();
-		await get_slack_message_modal_on_close_helper(apiToken, cookie, this.url, this.get_slack_message, this.plugin.settings, this.app.vault, alert);
+		await get_slack_message_modal_on_close_helper(apiToken, cookie, this.url, this.get_slack_message, this.plugin.settings, this.app.vault);
 		contentEl.empty();
 	}
 }
