@@ -1,8 +1,7 @@
 import wasm from "../../rust/Cargo.toml"
 import { App, Modal, Notice, Plugin, PluginSettingTab, request, RequestUrlParam, Setting, Vault } from 'obsidian';
 import { LocalStorageSettings } from "src/localStorageSettings";
-import * as path from "path";
-import { DEFAULT_SETTINGS, get_slack_message_modal_on_close_helper, ObsidianSlackPluginSettings, process_result } from "./utils";
+import { DEFAULT_SETTINGS, get_slack_message_modal_on_close_helper, ObsidianSlackPluginSettings } from "./utils";
 
 export default class ObsidianSlackPlugin extends Plugin {
 	settings: ObsidianSlackPluginSettings;

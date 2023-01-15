@@ -4,7 +4,9 @@
   "description": "This is a plugin for downloading slack messages to your obsidian vault",
   "main": "index.ts",
   "scripts": {
-    "test": "npx jest",
+    "test": "rollup --config rollup.config.js; npx jest; cd ../rust; wasm-pack test --node",
+    "test_js": "rollup --config rollup.config.js; npx jest",
+    "test_rust": "rollup --config rollup.config.js; cd ../rust; wasm-pack test --node",
     "dev": "rollup --watch --config rollup.config.js",
     "version": "node version-bump.mjs"
   },
