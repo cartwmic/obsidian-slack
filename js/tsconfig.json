@@ -20,11 +20,11 @@
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
+    "**/*.tsx"
   ],
   "exclude": [
     "node_modules/*",
     "target/**",
     "rollup.config.js"
-  ],
+  ]
 }

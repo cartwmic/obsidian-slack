@@ -1,24 +1,24 @@
 import ObsidianSlackPlugin from "./index";
 
 export class LocalStorageSettings {
-    private prefix: string;
-    constructor(private readonly plugin: ObsidianSlackPlugin) {
-        this.prefix = this.plugin.manifest.id + ":";
-    }
+  private prefix: string;
+  constructor(private readonly plugin: ObsidianSlackPlugin) {
+    this.prefix = this.plugin.manifest.id + ":";
+  }
 
-    getApiToken(): string | null {
-        return app.loadLocalStorage(this.prefix + "apiToken");
-    }
+  getApiToken(): string | null {
+    return app.loadLocalStorage(this.prefix + "apiToken");
+  }
 
-    setApiToken(value: string): void {
-        return app.saveLocalStorage(this.prefix + "apiToken", value);
-    }
+  setApiToken(value: string): void {
+    return app.saveLocalStorage(this.prefix + "apiToken", value);
+  }
 
-    getCookie(): string | null {
-        return app.loadLocalStorage(this.prefix + "cookie");
-    }
+  getCookie(): string | null {
+    return app.loadLocalStorage(this.prefix + "cookie");
+  }
 
-    setCookie(value: string): void {
-        return app.saveLocalStorage(this.prefix + "cookie", value);
-    }
+  setCookie(value: string): void {
+    return app.saveLocalStorage(this.prefix + "cookie", value);
+  }
 }

@@ -1,10 +1,10 @@
 {
-	"id": "obsidian-slack",
-	"name": "Obsidian Slack",
-	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "This is a plugin for downloading slack messages to your vault",
-	"author": "Michael Cartwright",
-	"authorUrl": "https://github.com/cartwmic",
-	"isDesktopOnly": false
+  "id": "obsidian-slack",
+  "name": "Obsidian Slack",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "This is a plugin for downloading slack messages to your vault",
+  "author": "Michael Cartwright",
+  "authorUrl": "https://github.com/cartwmic",
+  "isDesktopOnly": false
 }

@@ -11,28 +11,27 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3"
 test-case = "2.2"
+wasm-bindgen-test = "0.3"
 
 [dependencies]
-snafu = "0.7"
 amplify_derive = "2.11"
-wasm-bindgen = "0.2.63"
-wasm-bindgen-futures = "0.4"
+console_log = { version = "0.2", features = ["color"] }
 derive_builder = "0.12"
-js-sys = "0.3"
-futures = "0.3"
 do-notation = "0.1"
-serde_json = "1.0"
+futures = "0.3"
+js-sys = "0.3"
+log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.4"
-url = "2.3"
-log = "0.4"
-console_log = { version = "0.2", features = ["color"] }
-tuple-conv = "1.0"
+serde_json = "1.0"
+snafu = "0.7"
 strum = "0.24"
 strum_macros = "0.24"
-
+tuple-conv = "1.0"
+url = "2.3"
+wasm-bindgen = "0.2.63"
+wasm-bindgen-futures = "0.4"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
