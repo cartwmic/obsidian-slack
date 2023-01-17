@@ -3,7 +3,10 @@ use do_notation::m;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::{Debug, Display},
+};
 use wasm_bindgen_futures::JsFuture;
 
 use crate::{
@@ -28,6 +31,13 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
+pub trait CollectUser<T>: Debug + Display
+where
+    T: snafu::Error,
+{
+    fn collect_users(&self) -> std::result::Result<Vec<String>, T>;
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
 #[display(Debug)]
 pub struct User {
@@ -51,7 +61,7 @@ impl SlackResponseValidator for UserResponse {
 }
 
 pub async fn get_users_from_api<T>(
-    user_ids: &HashSet<String>,
+    user_ids: &Vec<String>,
     client: &SlackHttpClient<T>,
 ) -> Result<HashMap<String, User>>
 where

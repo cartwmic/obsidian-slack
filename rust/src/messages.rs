@@ -1,12 +1,14 @@
+use amplify_derive::Display;
 use do_notation::m;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
     slack_http_client::SlackHttpClient,
     slack_url::SlackUrl,
+    users::{self, CollectUser, User},
 };
 
 #[derive(Debug, Snafu)]
@@ -21,9 +23,17 @@ pub enum Error {
     CouldNotParseJsonFromMessageResponse { source: response::Error },
 
     #[snafu(display(
-        "Attempted to retrieve the user id for the message, but found none: {message}"
+        "Attempted to retrieve the user id for the message, but found none: {container}"
     ))]
-    UserIdWasNoneInMessage { message: String },
+    UserIdWasNoneInMessage { container: Message },
+
+    #[snafu(display(
+        "Attempted to retrieve user ids for messages in message response, but found none: message_response: {message_response} - thread_response: {thread_response}"
+    ))]
+    NoUsersFoundInMessageResponseOrThreadResponse {
+        message_response: MessageResponse,
+        thread_response: MessageResponse,
+    },
 
     #[snafu(display("Attempted to access messages in message response, but no messages found: {message_response}"))]
     MessagesNotFoundInMessageResponse { message_response: String },
@@ -34,14 +44,15 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, Display)]
+#[display(Debug)]
 pub struct MessageAndThread {
     pub message: MessageResponse,
     pub thread: MessageResponse,
 }
 
-impl MessageAndThread {
-    pub fn collect_users(&self) -> Result<HashSet<String>> {
+impl CollectUser<Error> for MessageAndThread {
+    fn collect_users(&self) -> Result<Vec<String>> {
         self.message
             .collect_users()
             .and_then(|mut message_users| {
@@ -51,19 +62,28 @@ impl MessageAndThread {
                 })
             })
             .map_or(
-                UserIdWasNoneInMessageSnafu {
-                    message: format!("{:#?}", self.message),
+                NoUsersFoundInMessageResponseOrThreadResponseSnafu {
+                    message_response: self.message.clone(),
+                    thread_response: self.thread.clone(),
                 }
                 .fail(),
-                |user_ids| Ok(user_ids.into_iter().collect()),
+                |user_ids| {
+                    Ok(user_ids
+                        .into_iter()
+                        .collect::<HashSet<String>>()
+                        .into_iter()
+                        .collect())
+                },
             )
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Display)]
+#[display(Debug)]
 pub struct Message {
     pub r#type: Option<String>,
     pub user: Option<String>,
+    pub user_info: Option<User>,
     pub text: Option<String>,
     pub thread_ts: Option<String>,
     pub reply_count: Option<u16>,
@@ -76,7 +96,8 @@ pub struct MessageResponseMetadata {
     next_cursor: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Display)]
+#[display(Debug)]
 pub struct MessageResponse {
     pub is_null: Option<bool>,
     pub messages: Option<Vec<Message>>,
@@ -103,8 +124,10 @@ impl MessageResponse {
             );
         copy
     }
+}
 
-    pub fn collect_users(&self) -> Result<Vec<String>> {
+impl CollectUser<Error> for MessageResponse {
+    fn collect_users(&self) -> Result<Vec<String>> {
         self.messages.as_ref().map_or(
             MessagesNotFoundInMessageResponseSnafu {
                 message_response: format!("{:#?}", &self),
@@ -116,7 +139,7 @@ impl MessageResponse {
                     .map(|message| {
                         message.user.as_ref().map_or(
                             UserIdWasNoneInMessageSnafu {
-                                message: format!("{:#?}", message),
+                                container: message.to_owned(),
                             }
                             .fail(),
                             |user| Ok(user.to_string()),
