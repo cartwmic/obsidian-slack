@@ -34,9 +34,6 @@ use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Snafu)]
 pub enum Error {
-    #[snafu(display("When mapping user ids from response to retrieved user info, user id was not in user map. user_id: {user_id} - user_map: {user_map}"))]
-    UserIdNotFoundInUserMap { user_id: String, user_map: String },
-
     #[snafu(display(
         "Could not parse feature flags js value to a feature flags rust object: {feature_flags} - source: {source}"
     ))]
@@ -84,72 +81,11 @@ impl ObsidianSlackComponents {
     // finalize for saving, replace user ids with object, team id with object, channel id with object, reactions, etc.
     fn finalize(mut components: ObsidianSlackComponents) -> Result<ObsidianSlackComponents> {
         // evenetually, self.users.iter.finalize() to add team info, etc.
-        components.message_and_thread = ObsidianSlackComponents::finalize_message_and_thread(
+        components.message_and_thread = MessageAndThread::finalize_message_and_thread(
             components.message_and_thread,
             components.users.as_ref(),
-        )?;
+        ).context(CouldNotGetUsersFromMessagesSnafu)?;
         Ok(components)
-    }
-
-    fn finalize_message_and_thread(
-        mut message_and_thread: MessageAndThread,
-        user_map: Option<&HashMap<String, User>>,
-    ) -> Result<MessageAndThread> {
-        message_and_thread.message = ObsidianSlackComponents::finalize_message_response(
-            message_and_thread.message,
-            user_map,
-        )?;
-        message_and_thread.thread = ObsidianSlackComponents::finalize_message_response(
-            message_and_thread.thread,
-            user_map,
-        )?;
-        Ok(message_and_thread)
-    }
-
-    fn finalize_message_response(
-        mut message_response: MessageResponse,
-        user_map: Option<&HashMap<String, User>>,
-    ) -> Result<MessageResponse> {
-        message_response.messages = Some(
-            message_response
-                .messages
-                .expect("expected messages to finalize, None was available. This is a bug")
-                .into_iter()
-                .map(|mut message| {
-                    message = ObsidianSlackComponents::finalize_message(message, user_map)?;
-                    Ok(message)
-                })
-                .collect::<Result<Vec<Message>>>()?,
-        );
-        Ok(message_response)
-    }
-
-    fn finalize_message(
-        mut message: Message,
-        user_map: Option<&HashMap<String, User>>,
-    ) -> Result<Message> {
-        match user_map {
-            Some(user_map) => {
-                let user_id = message
-                    .user
-                    .as_ref()
-                    .expect("expected a user id, got None. This should never happen");
-                user_map.get(user_id).map_or(
-                    UserIdNotFoundInUserMapSnafu {
-                        user_id,
-                        user_map: format!("{:#?}", user_map),
-                    }
-                    .fail(),
-                    |user| {
-                        Ok({
-                            message.user_info = Some(user.to_owned());
-                            message
-                        })
-                    },
-                )
-            }
-            None => Ok(message),
-        }
     }
 }
 

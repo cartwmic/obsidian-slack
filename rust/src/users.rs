@@ -31,35 +31,6 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-pub trait CollectUser<T>: Debug + Display
-where
-    T: snafu::Error,
-{
-    fn collect_users(&self) -> std::result::Result<Vec<String>, T>;
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
-#[display(Debug)]
-pub struct User {
-    pub id: String,
-    pub team_id: Option<String>,
-    pub name: Option<String>,
-    pub real_name: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct UserResponse {
-    pub ok: Option<bool>,
-    pub error: Option<String>,
-    pub user: Option<User>,
-}
-
-impl SlackResponseValidator for UserResponse {
-    fn ok(&self) -> Option<bool> {
-        self.ok
-    }
-}
-
 pub async fn get_users_from_api<T>(
     user_ids: &Vec<String>,
     client: &SlackHttpClient<T>,
@@ -98,4 +69,33 @@ where
                 .expect("Expected a user in the user response, but got None. This is a bug")
         }))
         .collect::<HashMap<String, User>>())
+}
+
+pub trait CollectUser<T>: Debug + Display
+where
+    T: snafu::Error,
+{
+    fn collect_users(&self) -> std::result::Result<Vec<String>, T>;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
+#[display(Debug)]
+pub struct User {
+    pub id: String,
+    pub team_id: Option<String>,
+    pub name: Option<String>,
+    pub real_name: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UserResponse {
+    pub ok: Option<bool>,
+    pub error: Option<String>,
+    pub user: Option<User>,
+}
+
+impl SlackResponseValidator for UserResponse {
+    fn ok(&self) -> Option<bool> {
+        self.ok
+    }
 }
