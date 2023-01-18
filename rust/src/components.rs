@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 
 use derive_builder::Builder;
-use serde::{Serialize, Deserialize};
-use snafu::{Snafu, ResultExt};
+use serde::{Deserialize, Serialize};
+use snafu::{ResultExt, Snafu};
 
-use crate::{messages::{MessageAndThread, self}, users::User};
+use crate::{
+    messages::{self, MessageAndThread},
+    users::User,
+};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -29,7 +32,8 @@ impl ObsidianSlackComponents {
         components.message_and_thread = MessageAndThread::finalize_message_and_thread(
             components.message_and_thread,
             components.users.as_ref(),
-        ).context(CouldNotGetUsersFromMessagesSnafu)?;
+        )
+        .context(CouldNotGetUsersFromMessagesSnafu)?;
         Ok(components)
     }
 }

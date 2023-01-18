@@ -2,7 +2,10 @@ use amplify_derive::Display;
 use do_notation::m;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
@@ -31,11 +34,10 @@ pub enum Error {
     UserIdWasNoneInMessage { container: Message },
 
     #[snafu(display(
-        "Attempted to retrieve user ids for messages in message response, but found none: message_response: {message_response} - thread_response: {thread_response}"
+        "Attempted to retrieve user ids for messages in message response, but found none: message_and_thread: {message_and_thread}"
     ))]
     NoUsersFoundInMessageResponseOrThreadResponse {
-        message_response: MessageResponse,
-        thread_response: MessageResponse,
+        message_and_thread: MessageAndThread,
     },
 
     #[snafu(display("Attempted to access messages in message response, but no messages found: {message_response}"))]
@@ -75,8 +77,16 @@ where
     let copy = MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
 
     Ok(MessageAndThread {
-        message: copy,
-        thread: response,
+        message: Messages {
+            messages: copy
+                .messages
+                .expect("Expected messsages but found None, this is a bug"),
+        },
+        thread: Messages {
+            messages: response
+                .messages
+                .expect("Expected messsages but found None, this is a bug"),
+        },
     })
 }
 
@@ -113,50 +123,6 @@ impl MessageResponse {
             );
         copy
     }
-
-    fn finalize_message_response(
-        mut message_response: MessageResponse,
-        user_map: Option<&HashMap<String, User>>,
-    ) -> Result<MessageResponse> {
-        message_response.messages = Some(
-            message_response
-                .messages
-                .expect("expected messages to finalize, None was available. This is a bug")
-                .into_iter()
-                .map(|mut message| {
-                    message = Message::finalize_message(message, user_map)?;
-                    Ok(message)
-                })
-                .collect::<Result<Vec<Message>>>()?,
-        );
-        Ok(message_response)
-    }
-
-}
-
-impl CollectUser<Error> for MessageResponse {
-    fn collect_users(&self) -> Result<Vec<String>> {
-        self.messages.as_ref().map_or(
-            MessagesNotFoundInMessageResponseSnafu {
-                message_response: format!("{:#?}", &self),
-            }
-            .fail(),
-            |messages| {
-                messages
-                    .iter()
-                    .map(|message| {
-                        message.user.as_ref().map_or(
-                            UserIdWasNoneInMessageSnafu {
-                                container: message.to_owned(),
-                            }
-                            .fail(),
-                            |user| Ok(user.to_string()),
-                        )
-                    })
-                    .collect::<Result<Vec<String>>>()
-            },
-        )
-    }
 }
 
 impl SlackResponseValidator for MessageResponse {
@@ -165,56 +131,44 @@ impl SlackResponseValidator for MessageResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Display)]
+#[derive(Debug, Serialize, Deserialize, Clone, Display)]
 #[display(Debug)]
-pub struct MessageAndThread {
-    pub message: MessageResponse,
-    pub thread: MessageResponse,
+pub struct Messages {
+    messages: Vec<Message>,
 }
 
-impl CollectUser<Error> for MessageAndThread {
+impl CollectUser<Error> for Messages {
     fn collect_users(&self) -> Result<Vec<String>> {
-        self.message
-            .collect_users()
-            .and_then(|mut message_users| {
-                self.thread.collect_users().map(|thread_users| {
-                    message_users.extend(thread_users);
-                    message_users
-                })
+        self.messages
+            .iter()
+            .map(|message| {
+                message.user.as_ref().map_or(
+                    UserIdWasNoneInMessageSnafu {
+                        container: message.to_owned(),
+                    }
+                    .fail(),
+                    |user| Ok(user.to_string()),
+                )
             })
-            .map_or(
-                NoUsersFoundInMessageResponseOrThreadResponseSnafu {
-                    message_response: self.message.clone(),
-                    thread_response: self.thread.clone(),
-                }
-                .fail(),
-                |user_ids| {
-                    Ok(user_ids
-                        .into_iter()
-                        .collect::<HashSet<String>>()
-                        .into_iter()
-                        .collect())
-                },
-            )
+            .collect::<Result<Vec<String>>>()
     }
 }
 
-impl MessageAndThread {
-    pub fn finalize_message_and_thread(
-        mut message_and_thread: MessageAndThread,
+impl Messages {
+    fn finalize_messages(
+        mut messages: Messages,
         user_map: Option<&HashMap<String, User>>,
-    ) -> Result<MessageAndThread> {
-        message_and_thread.message = MessageResponse::finalize_message_response(
-            message_and_thread.message,
-            user_map,
-        )?;
-        message_and_thread.thread = MessageResponse::finalize_message_response(
-            message_and_thread.thread,
-            user_map,
-        )?;
-        Ok(message_and_thread)
+    ) -> Result<Messages> {
+        messages.messages = messages
+            .messages
+            .into_iter()
+            .map(|mut message| {
+                message = Message::finalize_message(message, user_map)?;
+                Ok(message)
+            })
+            .collect::<Result<Vec<Message>>>()?;
+        Ok(messages)
     }
-
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Display)]
@@ -260,3 +214,48 @@ impl Message {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Display)]
+#[display(Debug)]
+pub struct MessageAndThread {
+    pub message: Messages,
+    pub thread: Messages,
+}
+
+impl CollectUser<Error> for MessageAndThread {
+    fn collect_users(&self) -> Result<Vec<String>> {
+        self.message
+            .collect_users()
+            .and_then(|mut message_users| {
+                self.thread.collect_users().map(|thread_users| {
+                    message_users.extend(thread_users);
+                    message_users
+                })
+            })
+            .map_or(
+                NoUsersFoundInMessageResponseOrThreadResponseSnafu {
+                    message_and_thread: self.clone(),
+                }
+                .fail(),
+                |user_ids| {
+                    Ok(user_ids
+                        .into_iter()
+                        .collect::<HashSet<String>>()
+                        .into_iter()
+                        .collect())
+                },
+            )
+    }
+}
+
+impl MessageAndThread {
+    pub fn finalize_message_and_thread(
+        mut message_and_thread: MessageAndThread,
+        user_map: Option<&HashMap<String, User>>,
+    ) -> Result<MessageAndThread> {
+        message_and_thread.message =
+            Messages::finalize_messages(message_and_thread.message, user_map)?;
+        message_and_thread.thread =
+            Messages::finalize_messages(message_and_thread.thread, user_map)?;
+        Ok(message_and_thread)
+    }
+}

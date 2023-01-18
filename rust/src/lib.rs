@@ -6,7 +6,7 @@
 //! corresponding 'xoxd' cookie.
 
 mod channel;
-mod components;
+pub mod components;
 pub mod messages;
 mod response;
 pub mod slack_http_client;
@@ -63,13 +63,11 @@ pub enum Error {
         "There was a problem gathering components of message request - source: {source}"
     ))]
     CouldNotBuildComponentsTogether {
-        source: components::ObsidianSlackComponentsBuilderError
+        source: components::ObsidianSlackComponentsBuilderError,
     },
 
     #[snafu(display("There was a problem finalizing components to save - source {source}"))]
-    CouldNotFinalizeComponents {
-        source: components::Error
-    },
+    CouldNotFinalizeComponents { source: components::Error },
 
     #[snafu(display("There was a problem finalizing messages for saving - source: {source}"))]
     CouldNotFinalizeMessages { source: messages::Error },
