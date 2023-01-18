@@ -6,6 +6,7 @@
 //! corresponding 'xoxd' cookie.
 
 mod channel;
+mod components;
 pub mod messages;
 mod response;
 pub mod slack_http_client;
@@ -20,6 +21,7 @@ use crate::{
     utils::create_file_name,
 };
 use channel::Channel;
+use components::{ObsidianSlackComponents, ObsidianSlackComponentsBuilder};
 use derive_builder::Builder;
 use do_notation::m;
 use js_sys::Promise;
@@ -61,7 +63,12 @@ pub enum Error {
         "There was a problem gathering components of message request - source: {source}"
     ))]
     CouldNotBuildComponentsTogether {
-        source: ObsidianSlackComponentsBuilderError,
+        source: components::ObsidianSlackComponentsBuilderError
+    },
+
+    #[snafu(display("There was a problem finalizing components to save - source {source}"))]
+    CouldNotFinalizeComponents {
+        source: components::Error
     },
 
     #[snafu(display("There was a problem finalizing messages for saving - source: {source}"))]
@@ -69,25 +76,6 @@ pub enum Error {
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
-
-#[derive(Debug, Clone, Builder, Serialize, Deserialize)]
-pub struct ObsidianSlackComponents {
-    message_and_thread: MessageAndThread,
-    file_name: String,
-    users: Option<HashMap<String, User>>,
-}
-
-impl ObsidianSlackComponents {
-    // finalize for saving, replace user ids with object, team id with object, channel id with object, reactions, etc.
-    fn finalize(mut components: ObsidianSlackComponents) -> Result<ObsidianSlackComponents> {
-        // evenetually, self.users.iter.finalize() to add team info, etc.
-        components.message_and_thread = MessageAndThread::finalize_message_and_thread(
-            components.message_and_thread,
-            components.users.as_ref(),
-        ).context(CouldNotGetUsersFromMessagesSnafu)?;
-        Ok(components)
-    }
-}
 
 #[wasm_bindgen]
 pub fn init_wasm(log_level: Option<String>) {
@@ -153,7 +141,7 @@ pub async fn get_slack_message(
         let (mut components_builder, slack_url) = results_from_api;
         let file_name = create_file_name(&slack_url);
         components <- components_builder.file_name(file_name).build().context(CouldNotBuildComponentsTogetherSnafu);
-        components <- ObsidianSlackComponents::finalize(components);
+        components <- ObsidianSlackComponents::finalize(components).context(CouldNotFinalizeComponentsSnafu);
         return components;
     }
     .map_or_else(
