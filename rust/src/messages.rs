@@ -1,6 +1,7 @@
 use amplify_derive::Display;
 use do_notation::m;
 use serde::{Deserialize, Serialize};
+use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
 use std::{
     collections::{HashMap, HashSet},
@@ -11,7 +12,7 @@ use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
     slack_http_client::SlackHttpClient,
     slack_url::SlackUrl,
-    users::{self, CollectUser, User},
+    users::{self, CollectUser, User, Users},
 };
 
 #[derive(Debug, Snafu)]
@@ -77,16 +78,15 @@ where
     let copy = MessageResponse::copy_from_existing_given_seed_ts(&response, &slack_url.ts);
 
     Ok(MessageAndThread {
-        message: Messages {
-            messages: copy
+        message: Messages(
+            copy.messages
+                .expect("Expected messsages but found None, this is a bug"),
+        ),
+        thread: Messages(
+            response
                 .messages
                 .expect("Expected messsages but found None, this is a bug"),
-        },
-        thread: Messages {
-            messages: response
-                .messages
-                .expect("Expected messsages but found None, this is a bug"),
-        },
+        ),
     })
 }
 
@@ -131,16 +131,14 @@ impl SlackResponseValidator for MessageResponse {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Display)]
+#[derive(Debug, Serialize, Deserialize, Clone, Display, Shrinkwrap, PartialEq, Eq)]
 #[display(Debug)]
-pub struct Messages {
-    messages: Vec<Message>,
-}
+#[shrinkwrap(mutable)]
+pub struct Messages(pub Vec<Message>);
 
 impl CollectUser<Error> for Messages {
     fn collect_users(&self) -> Result<Vec<String>> {
-        self.messages
-            .iter()
+        self.iter()
             .map(|message| {
                 message.user.as_ref().map_or(
                     UserIdWasNoneInMessageSnafu {
@@ -155,23 +153,22 @@ impl CollectUser<Error> for Messages {
 }
 
 impl Messages {
-    fn finalize_messages(
-        mut messages: Messages,
-        user_map: Option<&HashMap<String, User>>,
-    ) -> Result<Messages> {
-        messages.messages = messages
-            .messages
-            .into_iter()
-            .map(|mut message| {
-                message = Message::finalize_message(message, user_map)?;
-                Ok(message)
-            })
-            .collect::<Result<Vec<Message>>>()?;
+    fn finalize_messages(mut messages: Messages, users: Option<&Users>) -> Result<Messages> {
+        messages = Messages(
+            messages
+                .0
+                .into_iter()
+                .map(|mut message| {
+                    message = Message::finalize_message(message, users)?;
+                    Ok(message)
+                })
+                .collect::<Result<Vec<Message>>>()?,
+        );
         Ok(messages)
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Display)]
+#[derive(Debug, Serialize, Deserialize, Clone, Display, PartialEq, Eq)]
 #[display(Debug)]
 pub struct Message {
     pub r#type: Option<String>,
@@ -185,20 +182,17 @@ pub struct Message {
 }
 
 impl Message {
-    fn finalize_message(
-        mut message: Message,
-        user_map: Option<&HashMap<String, User>>,
-    ) -> Result<Message> {
-        match user_map {
-            Some(user_map) => {
+    fn finalize_message(mut message: Message, users: Option<&Users>) -> Result<Message> {
+        match users {
+            Some(users) => {
                 let user_id = message
                     .user
                     .as_ref()
                     .expect("expected a user id, got None. This should never happen");
-                user_map.get(user_id).map_or(
+                users.get(user_id).map_or(
                     UserIdNotFoundInUserMapSnafu {
                         user_id,
-                        user_map: format!("{:#?}", user_map),
+                        user_map: format!("{:#?}", users),
                     }
                     .fail(),
                     |user| {
@@ -214,7 +208,7 @@ impl Message {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, Display, PartialEq, Eq)]
 #[display(Debug)]
 pub struct MessageAndThread {
     pub message: Messages,
@@ -250,12 +244,11 @@ impl CollectUser<Error> for MessageAndThread {
 impl MessageAndThread {
     pub fn finalize_message_and_thread(
         mut message_and_thread: MessageAndThread,
-        user_map: Option<&HashMap<String, User>>,
+        users: Option<&Users>,
     ) -> Result<MessageAndThread> {
         message_and_thread.message =
-            Messages::finalize_messages(message_and_thread.message, user_map)?;
-        message_and_thread.thread =
-            Messages::finalize_messages(message_and_thread.thread, user_map)?;
+            Messages::finalize_messages(message_and_thread.message, users)?;
+        message_and_thread.thread = Messages::finalize_messages(message_and_thread.thread, users)?;
         Ok(message_and_thread)
     }
 }

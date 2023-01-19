@@ -187,7 +187,7 @@ async fn get_results_from_api(
     let mut components_builder = ObsidianSlackComponentsBuilder::default();
     let components_builder = components_builder.message_and_thread(message_and_thread);
 
-    client.config.feature_flags.get_users.then_some({
+    if client.config.feature_flags.get_users {
         let user_ids = components_builder
             .message_and_thread
             .as_ref()
@@ -199,8 +199,10 @@ async fn get_results_from_api(
             .await
             .context(CouldNotGetUsersFromApiSnafu)?;
 
-        components_builder.users(Some(users))
-    });
+        components_builder.users(Some(users));
+    } else {
+        components_builder.users(None);
+    };
 
     Ok((components_builder.to_owned(), slack_url))
 }
