@@ -183,8 +183,8 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         }
     }
 
-    pub fn get_conversation_replies(&self, channel_id: &str, timestamp: &str) -> ClientReturnType {
-        let log_prefix = "rust|get_conversation_replies";
+    pub fn get_conversations_replies(&self, channel_id: &str, timestamp: &str) -> ClientReturnType {
+        let log_prefix = "rust|get_conversations_replies";
         log::info!(
             "{}|channel_id={}|timestamp={}",
             &log_prefix,
@@ -211,12 +211,29 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         (self.request_func)(the_request)
     }
 
-    pub fn get_user_info(&self, user_id: &str) -> ClientReturnType {
-        let log_prefix = "rust|get_user_info";
+    pub fn get_users_info(&self, user_id: &str) -> ClientReturnType {
+        let log_prefix = "rust|get_users_info";
         log::info!("{}|user_id={}", &log_prefix, user_id);
 
         log::info!("{}|build request url", &log_prefix);
         let request_url = self.build_request_uri("users.info", vec![("user", user_id)]);
+
+        log::info!("{}|build request object", &log_prefix);
+        let the_request = self
+            .build_base_get_request()
+            .with_url(request_url.to_string());
+
+        log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);
+        (self.request_func)(the_request)
+    }
+
+    pub fn get_conversations_info(&self, channel_id: &str) -> ClientReturnType {
+        let log_prefix = "rust|get_conversations_info";
+        log::info!("{}|channel_id={}", &log_prefix, channel_id);
+
+        log::info!("{}|build request url", &log_prefix);
+        let request_url =
+            self.build_request_uri("conversations.info", vec![("channel", channel_id)]);
 
         log::info!("{}|build request object", &log_prefix);
         let the_request = self

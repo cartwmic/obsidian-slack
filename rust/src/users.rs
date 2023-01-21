@@ -41,7 +41,7 @@ where
 {
     let users = user_ids
         .iter()
-        .map(|user_id| JsFuture::from(client.get_user_info(user_id)))
+        .map(|user_id| JsFuture::from(client.get_users_info(user_id)))
         .collect::<Vec<JsFuture>>();
 
     let user_responses = join_all(users)
@@ -80,6 +80,10 @@ where
 {
     fn collect_users(&self) -> std::result::Result<Vec<String>, T>;
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, Display, Shrinkwrap, PartialEq, Eq)]
+#[display(Debug)]
+pub struct UserIds(pub Vec<String>);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
 #[display(Debug)]

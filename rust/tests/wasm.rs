@@ -115,7 +115,7 @@ fn get_mock_request_function(
                 ]
             ),
         },
-        file_name: "C0000000000-0000000000.000000.json".to_string(),
+        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
         users: None
     }
     ; "no thread_ts - no flags")]

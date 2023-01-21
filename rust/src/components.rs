@@ -1,12 +1,13 @@
-use std::collections::HashMap;
-
+use amplify_derive::Display;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
 
 use crate::{
+    channels::{Channel, ChannelId},
     messages::{self, MessageAndThread},
-    users::Users,
+    users::{UserIds, Users},
 };
 
 #[derive(Debug, Snafu)]
@@ -17,12 +18,19 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Debug, Clone, Builder, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Display, Shrinkwrap, PartialEq, Eq)]
+#[display(Debug)]
+pub struct FileName(pub String);
+
+#[derive(Debug, Clone, Builder, Serialize, Deserialize, PartialEq)]
 #[builder(field(public))]
 pub struct ObsidianSlackComponents {
     pub message_and_thread: MessageAndThread,
-    pub file_name: String,
+    pub file_name: FileName,
+    pub channel_id: ChannelId,
+    pub user_ids: UserIds,
     pub users: Option<Users>,
+    pub channel: Option<Channel>,
 }
 
 impl ObsidianSlackComponents {

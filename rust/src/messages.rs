@@ -60,7 +60,7 @@ where
     let thread_ts = slack_url.thread_ts.as_ref().unwrap_or(&slack_url.ts);
 
     let awaited_val = wasm_bindgen_futures::JsFuture::from(
-        client.get_conversation_replies(&slack_url.channel_id, thread_ts),
+        client.get_conversations_replies(&slack_url.channel_id, thread_ts),
     )
     .await
     // mapping error instead of using snafu context because jsvalue is not an Error from parse method

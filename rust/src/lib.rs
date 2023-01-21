@@ -5,7 +5,7 @@
 //! This is possible by using Slack's web interface's 'xoxc' token and
 //! corresponding 'xoxd' cookie.
 
-mod channel;
+pub mod channels;
 pub mod components;
 pub mod messages;
 mod response;
@@ -20,8 +20,8 @@ use crate::{
     users::User,
     utils::create_file_name,
 };
-use channel::Channel;
-use components::{ObsidianSlackComponents, ObsidianSlackComponentsBuilder};
+use channels::{Channel, ChannelId};
+use components::{FileName, ObsidianSlackComponents, ObsidianSlackComponentsBuilder};
 use derive_builder::Builder;
 use do_notation::m;
 use js_sys::Promise;
@@ -55,6 +55,9 @@ pub enum Error {
 
     #[snafu(display("Could not get users from api - source: {source}"))]
     CouldNotGetUsersFromApi { source: users::Error },
+
+    #[snafu(display("Could not get channel from api - source: {source}"))]
+    CouldNotGetChannelFromApi { source: channels::Error },
 
     #[snafu(display("Could not get users from messages - source: {source}"))]
     CouldNotGetUsersFromMessages { source: messages::Error },
@@ -138,7 +141,7 @@ pub async fn get_slack_message(
         results_from_api <- results_from_api;
         let (mut components_builder, slack_url) = results_from_api;
         let file_name = create_file_name(&slack_url);
-        components <- components_builder.file_name(file_name).build().context(CouldNotBuildComponentsTogetherSnafu);
+        components <- components_builder.file_name(FileName(file_name)).build().context(CouldNotBuildComponentsTogetherSnafu);
         components <- ObsidianSlackComponents::finalize(components).context(CouldNotFinalizeComponentsSnafu);
         return components;
     }
@@ -184,16 +187,42 @@ async fn get_results_from_api(
         .await
         .context(CouldNotGetMessagesFromApiSnafu)?;
 
-    let mut components_builder = ObsidianSlackComponentsBuilder::default();
-    let components_builder = components_builder.message_and_thread(message_and_thread);
+    let components_builder = &mut ObsidianSlackComponentsBuilder::default();
+    components_builder.message_and_thread(message_and_thread);
+    components_builder.channel_id(ChannelId(slack_url.channel_id.clone()));
+
+    if client.config.feature_flags.get_channel_info {
+        components_builder.channel(Some(
+            channels::get_channel_from_api(
+                &client,
+                components_builder
+                    .channel_id
+                    .as_ref()
+                    .expect("Expect channel id, found None. This is a bug"),
+            )
+            .await
+            .context(CouldNotGetChannelFromApiSnafu)?,
+        ));
+    } else {
+        components_builder.channel(None);
+    }
 
     if client.config.feature_flags.get_users {
-        let user_ids = components_builder
+        let mut user_ids = components_builder
             .message_and_thread
             .as_ref()
             .expect("expected a message and thread, found None. This is a bug")
             .collect_users()
             .context(CouldNotGetUsersFromMessagesSnafu)?;
+
+        components_builder
+            .channel
+            .as_ref()
+            .expect("expected a channel option, but found None, this is a bug")
+            .as_ref()
+            .map_or(Ok::<(), Error>(()), |channel| {
+                Ok(user_ids.extend(channel.collect_users().unwrap_or_else(|err| vec![])))
+            });
 
         let users = users::get_users_from_api(&user_ids, &client)
             .await
