@@ -1,6 +1,6 @@
 use amplify_derive::Display;
 use do_notation::m;
-use futures::stream::Collect;
+
 use serde::{Deserialize, Serialize};
 use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};

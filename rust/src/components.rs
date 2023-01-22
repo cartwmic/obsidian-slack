@@ -5,9 +5,9 @@ use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
 
 use crate::{
-    channels::{self, Channel, ChannelId},
+    channels::{self, Channel},
     messages::{self, MessageAndThread},
-    users::{CollectUser, UserIds, Users},
+    users::{CollectUser, Users},
 };
 
 #[derive(Debug, Snafu)]
@@ -83,8 +83,10 @@ impl CollectUser<Error> for ObsidianSlackComponentsBuilder {
             .unwrap_or(&None)
             .as_ref()
             .map_or(Ok::<(), Error>(()), |channel| {
-                Ok(user_ids.extend(channel.collect_users().expect("Should always have a vec of users from channel (can be empty), if err than this is a bug")))
+                user_ids.extend(channel.collect_users().expect("Should always have a vec of users from channel (can be empty), if err than this is a bug"));
+                Ok(())
             })?;
+
         Ok(user_ids)
     }
 }

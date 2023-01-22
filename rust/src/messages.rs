@@ -4,15 +4,14 @@ use serde::{Deserialize, Serialize};
 use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
 use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
+    collections::{HashSet},
 };
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
     slack_http_client::SlackHttpClient,
     slack_url::SlackUrl,
-    users::{self, CollectUser, User, Users},
+    users::{CollectUser, User, Users},
 };
 
 #[derive(Debug, Snafu)]

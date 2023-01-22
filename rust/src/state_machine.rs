@@ -1,15 +1,15 @@
 use amplify_derive::Display;
-use derive_builder::Builder;
+
 use js_sys::Promise;
 use snafu::{ResultExt, Snafu};
 
 use crate::{
-    channels::{self, Channel},
-    components::{self, ObsidianSlackComponents, ObsidianSlackComponentsBuilder},
-    messages::{self, MessageAndThread},
+    channels::{self},
+    components::{self, ObsidianSlackComponentsBuilder},
+    messages::{self},
     slack_http_client::{SlackHttpClient, SlackHttpClientConfigFeatureFlags},
     slack_url::SlackUrl,
-    users::{self, CollectUser, Users},
+    users::{self, CollectUser},
 };
 
 #[derive(Debug, Snafu)]

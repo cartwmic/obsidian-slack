@@ -16,25 +16,23 @@ pub mod users;
 mod utils;
 
 use crate::{
-    messages::MessageAndThread,
     slack_http_client::{get_api_base, SlackHttpClient, SlackHttpClientConfig},
-    users::User,
     utils::create_file_name,
 };
-use channels::{Channel, ChannelId};
+
 use components::{FileName, ObsidianSlackComponents, ObsidianSlackComponentsBuilder};
-use derive_builder::Builder;
+
 use do_notation::m;
 use js_sys::Promise;
-use messages::{Message, MessageResponse};
-use serde::{Deserialize, Serialize};
+
+
 use slack_url::SlackUrl;
 use snafu::{ResultExt, Snafu};
 use state_machine::{
     ObsidianSlackStateMachine, ObsidianSlackStateMachineInput, ObsidianSlackStates,
 };
-use std::{collections::HashMap, hash::Hash, str::FromStr, thread::current};
-use users::CollectUser;
+use std::{str::FromStr};
+
 use utils::{curry_request_func, set_panic_hook, top_level_fail};
 use wasm_bindgen::prelude::*;
 
