@@ -14,9 +14,6 @@ use crate::{
 
 #[derive(Debug, Snafu)]
 pub enum Error {
-    #[snafu(display("There was a problem finalizing components to save - source {source}"))]
-    CouldNotFinalizeComponents { source: components::Error },
-
     #[snafu(display("Could not get users from api - source: {source}"))]
     CouldNotGetUsersFromApi { source: users::Error },
 

@@ -3,9 +3,7 @@ use do_notation::m;
 use serde::{Deserialize, Serialize};
 use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
-use std::{
-    collections::{HashSet},
-};
+use std::collections::HashSet;
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},

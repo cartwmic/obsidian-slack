@@ -25,13 +25,12 @@ use components::{FileName, ObsidianSlackComponents, ObsidianSlackComponentsBuild
 use do_notation::m;
 use js_sys::Promise;
 
-
 use slack_url::SlackUrl;
 use snafu::{ResultExt, Snafu};
 use state_machine::{
     ObsidianSlackStateMachine, ObsidianSlackStateMachineInput, ObsidianSlackStates,
 };
-use std::{str::FromStr};
+use std::str::FromStr;
 
 use utils::{curry_request_func, set_panic_hook, top_level_fail};
 use wasm_bindgen::prelude::*;
@@ -52,18 +51,6 @@ pub enum Error {
     #[snafu(display("Could not create slack url - source: {source}"))]
     ErrorCreatingSlackUrl { source: slack_url::Error },
 
-    #[snafu(display("Could not get messages from api - source: {source}"))]
-    CouldNotGetMessagesFromApi { source: messages::Error },
-
-    #[snafu(display("Could not get users from api - source: {source}"))]
-    CouldNotGetUsersFromApi { source: users::Error },
-
-    #[snafu(display("Could not get channel from api - source: {source}"))]
-    CouldNotGetChannelFromApi { source: channels::Error },
-
-    #[snafu(display("Could not get users from messages - source: {source}"))]
-    CouldNotGetUsersFromMessages { source: messages::Error },
-
     #[snafu(display(
         "There was a problem gathering components of message request - source: {source}"
     ))]
@@ -73,9 +60,6 @@ pub enum Error {
 
     #[snafu(display("There was a problem finalizing components to save - source {source}"))]
     CouldNotFinalizeComponents { source: components::Error },
-
-    #[snafu(display("There was a problem finalizing messages for saving - source: {source}"))]
-    CouldNotFinalizeMessages { source: messages::Error },
 }
 
 #[wasm_bindgen]
