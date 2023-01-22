@@ -5,7 +5,7 @@ use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
 
 use crate::{
-    channels::{Channel, ChannelId},
+    channels::{self, Channel, ChannelId},
     messages::{self, MessageAndThread},
     users::{CollectUser, UserIds, Users},
 };
@@ -14,6 +14,9 @@ use crate::{
 pub enum Error {
     #[snafu(display("Could not get users from messages - source: {source}"))]
     CouldNotGetUsersFromMessages { source: messages::Error },
+
+    #[snafu(display("Could not get users from channel - source: {source}"))]
+    CouldNotGetUsersFromChannel { source: channels::Error },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -41,12 +44,20 @@ pub struct ObsidianSlackComponents {
 impl ObsidianSlackComponents {
     // finalize for saving, replace user ids with object, team id with object, channel id with object, reactions, etc.
     pub fn finalize(mut components: ObsidianSlackComponents) -> Result<ObsidianSlackComponents> {
-        // evenetually, self.users.iter.finalize() to add team info, etc.
         components.message_and_thread = MessageAndThread::finalize_message_and_thread(
             components.message_and_thread,
             components.users.as_ref(),
         )
         .context(CouldNotGetUsersFromMessagesSnafu)?;
+
+        components.channel = if let Some(channel) = components.channel {
+            Some(
+                Channel::finalize_channel(channel, components.users.as_ref())
+                    .context(CouldNotGetUsersFromChannelSnafu)?,
+            )
+        } else {
+            components.channel
+        };
         Ok(components)
     }
 }

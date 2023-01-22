@@ -9,18 +9,21 @@ use crate::{
     messages::Message,
     response::{self, convert_result_string_to_object, SlackResponseValidator},
     slack_http_client::SlackHttpClient,
-    users::CollectUser,
+    users::{CollectUser, User, Users},
 };
 
 #[derive(Debug, Snafu)]
 pub enum Error {
+    #[snafu(display("When mapping user ids from response to retrieved user info, user id was not in user map. user_id: {user_id} - user_map: {user_map}"))]
+    UserIdNotFoundInUserMap { user_id: String, user_map: String },
+
     #[snafu(display("User was none in channel response, indicating this channel is not a direct message: {channel}"))]
     UserInChannelWasNone { channel: Channel },
 
     #[snafu(display("Awaiting a JsFuture returned an error: {error}"))]
     WasmErrorFromJsFuture { error: String },
 
-    #[snafu(display("The message response was not ok. - source: {source}"))]
+    #[snafu(display("The channel response was not ok. - source: {source}"))]
     InvalidChannelResponse { source: response::Error },
 
     #[snafu(display("{source}"))]
@@ -66,34 +69,35 @@ pub struct ChannelId(pub String);
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Display)]
 #[display(Debug)]
 pub struct Channel {
-    id: Option<String>,
-    name: Option<String>,
-    is_channel: Option<bool>,
-    is_group: Option<bool>,
-    is_im: Option<bool>,
-    created: Option<i64>,
-    creator: Option<String>,
-    is_archived: Option<bool>,
-    is_general: Option<bool>,
-    unlinked: Option<i64>,
-    name_normalized: Option<String>,
-    is_read_only: Option<bool>,
-    is_shared: Option<bool>,
-    is_member: Option<bool>,
-    is_private: Option<bool>,
-    is_mpim: Option<bool>,
-    last_read: Option<String>,
-    topic: Option<ChannelAuxData>,
-    purpose: Option<ChannelAuxData>,
-    previous_names: Option<Vec<String>>,
-    locale: Option<String>,
-    is_org_shared: Option<bool>,
-    user: Option<String>,
-    latest: Option<Message>,
-    unread_count: Option<i64>,
-    unread_count_display: Option<i64>,
-    is_open: Option<bool>,
-    priority: Option<f64>,
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub is_channel: Option<bool>,
+    pub is_group: Option<bool>,
+    pub is_im: Option<bool>,
+    pub created: Option<i64>,
+    pub creator: Option<String>,
+    pub is_archived: Option<bool>,
+    pub is_general: Option<bool>,
+    pub unlinked: Option<i64>,
+    pub name_normalized: Option<String>,
+    pub is_read_only: Option<bool>,
+    pub is_shared: Option<bool>,
+    pub is_member: Option<bool>,
+    pub is_private: Option<bool>,
+    pub is_mpim: Option<bool>,
+    pub last_read: Option<String>,
+    pub topic: Option<ChannelAuxData>,
+    pub purpose: Option<ChannelAuxData>,
+    pub previous_names: Option<Vec<String>>,
+    pub locale: Option<String>,
+    pub is_org_shared: Option<bool>,
+    pub user: Option<String>,
+    pub user_info: Option<User>,
+    pub latest: Option<Message>,
+    pub unread_count: Option<i64>,
+    pub unread_count_display: Option<i64>,
+    pub is_open: Option<bool>,
+    pub priority: Option<f64>,
 }
 
 impl CollectUser<Error> for Channel {
@@ -101,6 +105,27 @@ impl CollectUser<Error> for Channel {
         self.user
             .as_ref()
             .map_or(Ok(vec![]), |user_id| Ok(vec![user_id.to_owned()]))
+    }
+}
+
+impl Channel {
+    pub fn finalize_channel(mut channel: Channel, users: Option<&Users>) -> Result<Channel> {
+        match (&channel.user, users) {
+            (Some(user_id), Some(users)) => users.get(user_id).map_or(
+                UserIdNotFoundInUserMapSnafu {
+                    user_id,
+                    user_map: format!("{:#?}", users),
+                }
+                .fail(),
+                |user| {
+                    Ok({
+                        channel.user_info = Some(user.to_owned());
+                        channel
+                    })
+                },
+            ),
+            _ => Ok(channel),
+        }
     }
 }
 

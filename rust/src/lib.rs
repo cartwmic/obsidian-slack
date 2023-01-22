@@ -80,8 +80,6 @@ pub enum Error {
     CouldNotFinalizeMessages { source: messages::Error },
 }
 
-type Result<T, E = Error> = std::result::Result<T, E>;
-
 #[wasm_bindgen]
 pub fn init_wasm(log_level: Option<String>) {
     set_panic_hook();
@@ -184,80 +182,3 @@ pub async fn get_slack_message(
         |buffer| serde_wasm_bindgen::to_value(&buffer).expect("Expected to serialize object with serde, but was unable to. This is a bug"),
     )
 }
-
-// async fn get_results_from_api(
-//     api_token: String,
-//     cookie: String,
-//     url: String,
-//     feature_flags: JsValue,
-//     request_func: JsValue,
-// ) -> Result<(ObsidianSlackComponentsBuilder, SlackUrl)> {
-//     // separate calls for intermediate results due to `and_then` closures not allowing await
-//     let make_request = curry_request_func(js_sys::Function::from(request_func));
-//     let feature_flags_string = format!("{:#?}", feature_flags);
-
-//     let (client, slack_url) = m! {
-//         feature_flags <- serde_wasm_bindgen::from_value(feature_flags).context(CouldNotParseFeatureFlagsSnafu {feature_flags: feature_flags_string});
-//         config <- SlackHttpClientConfig::new(
-//                 get_api_base(),
-//                 api_token.to_string(),
-//                 cookie.to_string(),
-//                 feature_flags,
-//             ).context(ErrorCreatingSlackHttpClientConfigSnafu);
-//         slack_url <- SlackUrl::new(&url).context(ErrorCreatingSlackUrlSnafu);
-//         let client = SlackHttpClient::<Promise>::new(config, make_request);
-//         return (client, slack_url);
-//     }?;
-
-//     let message_and_thread = messages::get_messages_from_api(&client, &slack_url)
-//         .await
-//         .context(CouldNotGetMessagesFromApiSnafu)?;
-
-//     let components_builder = &mut ObsidianSlackComponentsBuilder::default();
-//     components_builder.message_and_thread(message_and_thread);
-//     components_builder.channel_id(ChannelId(slack_url.channel_id.clone()));
-
-//     if client.config.feature_flags.get_channel_info {
-//         components_builder.channel(Some(
-//             channels::get_channel_from_api(
-//                 &client,
-//                 components_builder
-//                     .channel_id
-//                     .as_ref()
-//                     .expect("Expect channel id, found None. This is a bug"),
-//             )
-//             .await
-//             .context(CouldNotGetChannelFromApiSnafu)?,
-//         ));
-//     } else {
-//         components_builder.channel(None);
-//     }
-
-//     if client.config.feature_flags.get_users {
-//         let mut user_ids = components_builder
-//             .message_and_thread
-//             .as_ref()
-//             .expect("expected a message and thread, found None. This is a bug")
-//             .collect_users()
-//             .context(CouldNotGetUsersFromMessagesSnafu)?;
-
-//         components_builder
-//             .channel
-//             .as_ref()
-//             .expect("expected a channel option, but found None, this is a bug")
-//             .as_ref()
-//             .map_or(Ok::<(), Error>(()), |channel| {
-//                 Ok(user_ids.extend(channel.collect_users().unwrap_or_else(|err| vec![])))
-//             });
-
-//         let users = users::get_users_from_api(&user_ids, &client)
-//             .await
-//             .context(CouldNotGetUsersFromApiSnafu)?;
-
-//         components_builder.users(Some(users));
-//     } else {
-//         components_builder.users(None);
-//     };
-
-//     Ok((components_builder.to_owned(), slack_url))
-// }
