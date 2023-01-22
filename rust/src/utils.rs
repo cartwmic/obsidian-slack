@@ -56,3 +56,12 @@ pub fn curry_request_func(
         )
     })
 }
+
+pub fn top_level_fail(err: &dyn snafu::Error) -> JsValue {
+    let message = format!(
+        "There was a problem getting slack messages. Error message: {} - Error struct: {:#?}",
+        &err, &err
+    );
+    log::error!("{}", &message);
+    JsValue::from_str(&message)
+}

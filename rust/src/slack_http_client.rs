@@ -2,7 +2,7 @@ use amplify_derive::Display;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use snafu::{ensure, Snafu};
-use std::{borrow::Borrow, collections::HashMap, str::FromStr};
+use std::{borrow::Borrow, collections::HashMap, fmt::Debug, str::FromStr};
 use url::Url;
 
 #[derive(Debug, Snafu)]
@@ -61,7 +61,8 @@ pub struct SlackHttpClientConfig {
     pub feature_flags: SlackHttpClientConfigFeatureFlags,
 }
 
-#[derive(Debug, Serialize, Deserialize, Builder, Clone)]
+#[derive(Debug, Serialize, Deserialize, Builder, Clone, Display)]
+#[display(Debug)]
 pub struct SlackHttpClientConfigFeatureFlags {
     pub get_users: bool,
     pub get_reactions: bool,
@@ -114,6 +115,14 @@ pub enum SlackApiQueryParams {
 pub struct SlackHttpClient<ClientReturnType> {
     pub config: SlackHttpClientConfig,
     request_func: Box<dyn Fn(RequestUrlParam) -> ClientReturnType>,
+}
+
+impl<ClientReturnType> Debug for SlackHttpClient<ClientReturnType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SlackHttpClient")
+            .field("config", &self.config)
+            .finish()
+    }
 }
 
 impl<ClientReturnType> SlackHttpClient<ClientReturnType> {

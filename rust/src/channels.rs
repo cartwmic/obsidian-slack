@@ -98,13 +98,9 @@ pub struct Channel {
 
 impl CollectUser<Error> for Channel {
     fn collect_users(&self) -> Result<Vec<String>> {
-        self.user.as_ref().map_or(
-            UserInChannelWasNoneSnafu {
-                channel: self.to_owned(),
-            }
-            .fail(),
-            |user_id| Ok(vec![user_id.to_owned()]),
-        )
+        self.user
+            .as_ref()
+            .map_or(Ok(vec![]), |user_id| Ok(vec![user_id.to_owned()]))
     }
 }
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use js_sys::JSON;
 use obsidian_slack::{
-    components::ObsidianSlackComponents,
+    components::{FileName, ObsidianSlackComponents},
     get_slack_message,
     messages::{Message, MessageAndThread, MessageResponse, Messages},
     slack_http_client::SlackHttpClientConfigFeatureFlags,
@@ -116,7 +116,8 @@ fn get_mock_request_function(
             ),
         },
         file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: None
+        users: None,
+        channel: None
     }
     ; "no thread_ts - no flags")]
 #[test_case(
@@ -198,7 +199,7 @@ fn get_mock_request_function(
                 ],
             ),
         },
-        file_name: "C0000000000-0000000000.000000.json".to_string(),
+        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
         users: Some(Users(
             [(
                 "mock_user".to_owned(),
@@ -209,7 +210,8 @@ fn get_mock_request_function(
                     real_name: Some("mock_real_name".to_string()),
                 }
             )].iter().cloned().collect()
-        ))
+        )),
+        channel: None
     }
     ; "no thread_ts - user flag")]
 #[test_case(
@@ -301,8 +303,9 @@ fn get_mock_request_function(
                 ]
             ),
         },
-        file_name: "C0000000000-0000000000.000000.json".to_string(),
-        users: None
+        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
+        users: None,
+        channel: None
     }
     ; "thread_ts - thread_ts and ts the same - no flags")]
 #[test_case(
@@ -409,7 +412,8 @@ fn get_mock_request_function(
                 ]
             ),
         },
-        file_name: "C0000000000-0000000000.000000.json".to_string(),
+        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
+        channel: None,
         users: Some(Users(
             [(
                 "mock_user".to_owned(),
@@ -512,7 +516,8 @@ fn get_mock_request_function(
                 ]
             ),
         },
-        file_name: "C0000000000-0000000000.000000-0000000000.000001.json".to_string(),
+        file_name: FileName("C0000000000-0000000000.000000-0000000000.000001.json".to_string()),
+        channel: None,
         users: None
     }
     ; "thread_ts - thread_ts and ts not the same - no flags")]
@@ -620,7 +625,8 @@ fn get_mock_request_function(
                 ]
             ),
         },
-        file_name: "C0000000000-0000000000.000000-0000000000.000001.json".to_string(),
+        file_name: FileName("C0000000000-0000000000.000000-0000000000.000001.json".to_string()),
+        channel: None,
         users: Some(Users(
             [(
                 "mock_user".to_owned(),
