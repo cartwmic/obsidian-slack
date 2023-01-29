@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
 use std::{
-    collections::{HashMap},
+    collections::HashMap,
     fmt::{Debug, Display},
 };
 use wasm_bindgen_futures::JsFuture;

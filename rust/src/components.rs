@@ -77,7 +77,6 @@ impl CollectUser<Error> for ObsidianSlackComponentsBuilder {
             .collect_users()
             .context(CouldNotGetUsersFromMessagesSnafu)?;
 
-        // not getting users from channel
         self.channel
             .as_ref()
             .unwrap_or(&None)

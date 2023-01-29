@@ -3,7 +3,7 @@ use do_notation::m;
 use serde::{Deserialize, Serialize};
 use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
-use std::collections::HashSet;
+use std::{collections::HashSet, iter::FromIterator};
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
@@ -87,124 +87,6 @@ where
     })
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MessageResponseMetadata {
-    next_cursor: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Display)]
-#[display(Debug)]
-pub struct MessageResponse {
-    pub is_null: Option<bool>,
-    pub messages: Option<Vec<Message>>,
-    pub has_more: Option<bool>,
-    pub ok: Option<bool>,
-    pub error: Option<String>,
-    pub response_metadata: Option<MessageResponseMetadata>,
-}
-
-impl MessageResponse {
-    fn copy_from_existing_given_seed_ts(&self, seed_ts: &str) -> MessageResponse {
-        let mut copy = self.to_owned();
-        copy.messages =
-            Some(
-                copy.messages
-                    .expect("Expected messages to work on, got None. This is a bug")
-                    .into_iter()
-                    .filter(|message| {
-                        message.ts.as_ref().expect(
-                            "Expected message to have a timestamp, but got None. This is a bug",
-                        ) == seed_ts
-                    })
-                    .collect(),
-            );
-        copy
-    }
-}
-
-impl SlackResponseValidator for MessageResponse {
-    fn ok(&self) -> Option<bool> {
-        self.ok
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Display, Shrinkwrap, PartialEq, Eq)]
-#[display(Debug)]
-#[shrinkwrap(mutable)]
-pub struct Messages(pub Vec<Message>);
-
-impl CollectUser<Error> for Messages {
-    fn collect_users(&self) -> Result<Vec<String>> {
-        self.iter()
-            .map(|message| {
-                message.user.as_ref().map_or(
-                    UserIdWasNoneInMessageSnafu {
-                        container: message.to_owned(),
-                    }
-                    .fail(),
-                    |user| Ok(user.to_string()),
-                )
-            })
-            .collect::<Result<Vec<String>>>()
-    }
-}
-
-impl Messages {
-    fn finalize_messages(mut messages: Messages, users: Option<&Users>) -> Result<Messages> {
-        messages = Messages(
-            messages
-                .0
-                .into_iter()
-                .map(|mut message| {
-                    message = Message::finalize_message(message, users)?;
-                    Ok(message)
-                })
-                .collect::<Result<Vec<Message>>>()?,
-        );
-        Ok(messages)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Display, PartialEq, Eq)]
-#[display(Debug)]
-pub struct Message {
-    pub r#type: Option<String>,
-    pub user: Option<String>,
-    pub user_info: Option<User>,
-    pub text: Option<String>,
-    pub thread_ts: Option<String>,
-    pub reply_count: Option<u16>,
-    pub team: Option<String>,
-    pub ts: Option<String>,
-}
-
-impl Message {
-    fn finalize_message(mut message: Message, users: Option<&Users>) -> Result<Message> {
-        match users {
-            Some(users) => {
-                let user_id = message
-                    .user
-                    .as_ref()
-                    .expect("expected a user id, got None. This should never happen");
-                users.get(user_id).map_or(
-                    UserIdNotFoundInUserMapSnafu {
-                        user_id,
-                        user_map: format!("{:#?}", users),
-                    }
-                    .fail(),
-                    |user| {
-                        Ok({
-                            message.user_info = Some(user.to_owned());
-                            message
-                        })
-                    },
-                )
-            }
-            None => Ok(message),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Display, PartialEq, Eq)]
 #[display(Debug)]
 pub struct MessageAndThread {
@@ -247,5 +129,184 @@ impl MessageAndThread {
             Messages::finalize_messages(message_and_thread.message, users)?;
         message_and_thread.thread = Messages::finalize_messages(message_and_thread.thread, users)?;
         Ok(message_and_thread)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Display)]
+#[display(Debug)]
+pub struct MessageResponse {
+    pub is_null: Option<bool>,
+    pub messages: Option<Vec<Message>>,
+    pub has_more: Option<bool>,
+    pub ok: Option<bool>,
+    pub error: Option<String>,
+}
+
+impl MessageResponse {
+    fn copy_from_existing_given_seed_ts(&self, seed_ts: &str) -> MessageResponse {
+        let mut copy = self.to_owned();
+        copy.messages =
+            Some(
+                copy.messages
+                    .expect("Expected messages to work on, got None. This is a bug")
+                    .into_iter()
+                    .filter(|message| {
+                        message.ts.as_ref().expect(
+                            "Expected message to have a timestamp, but got None. This is a bug",
+                        ) == seed_ts
+                    })
+                    .collect(),
+            );
+        copy
+    }
+}
+
+impl SlackResponseValidator for MessageResponse {
+    fn ok(&self) -> Option<bool> {
+        self.ok
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Display, Shrinkwrap, PartialEq, Eq)]
+#[display(Debug)]
+#[shrinkwrap(mutable)]
+pub struct Messages(pub Vec<Message>);
+
+impl CollectUser<Error> for Messages {
+    fn collect_users(&self) -> Result<Vec<String>> {
+        Ok(self
+            .iter()
+            .map(|message| -> Result<Vec<String>> {
+                let message_user = message.user.as_ref().map_or(
+                    UserIdWasNoneInMessageSnafu {
+                        container: message.to_owned(),
+                    }
+                    .fail(),
+                    |user| Ok(user.to_string()),
+                )?;
+                let mut reactions_users = message.reactions.as_ref().map_or(vec![], |reactions| {
+                    reactions
+                        .iter()
+                        .map(|reaction| reaction.users.clone())
+                        .flatten()
+                        .collect::<Vec<String>>()
+                });
+                reactions_users.push(message_user);
+                Ok(reactions_users)
+            })
+            .collect::<Result<Vec<Vec<String>>>>()?
+            .into_iter()
+            .flatten()
+            .collect())
+    }
+}
+
+impl Messages {
+    fn finalize_messages(mut messages: Messages, users: Option<&Users>) -> Result<Messages> {
+        messages = Messages(
+            messages
+                .0
+                .into_iter()
+                .map(|mut message| {
+                    message = Message::finalize_message(message, users)?;
+                    Ok(message)
+                })
+                .collect::<Result<Vec<Message>>>()?,
+        );
+        Ok(messages)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Display, PartialEq, Eq)]
+#[display(Debug)]
+pub struct Message {
+    pub r#type: Option<String>,
+    pub user: Option<String>,
+    pub user_info: Option<User>,
+    pub text: Option<String>,
+    pub thread_ts: Option<String>,
+    pub reply_count: Option<u16>,
+    pub team: Option<String>,
+    pub ts: Option<String>,
+    pub reactions: Option<Reactions>,
+}
+
+impl Message {
+    fn finalize_message(mut message: Message, users: Option<&Users>) -> Result<Message> {
+        match users {
+            Some(users) => {
+                let user_id = message
+                    .user
+                    .as_ref()
+                    .expect("expected a user id, got None. This should never happen");
+                message = users.get(user_id).map_or(
+                    UserIdNotFoundInUserMapSnafu {
+                        user_id,
+                        user_map: format!("{:#?}", users),
+                    }
+                    .fail(),
+                    |user| {
+                        Ok({
+                            message.user_info = Some(user.to_owned());
+                            message
+                        })
+                    },
+                )?;
+
+                message.reactions = match message.reactions {
+                    Some(reactions) => Some(
+                        reactions
+                            .0
+                            .into_iter()
+                            .map(|reaction| Reaction::finalize_reaction(reaction, users))
+                            .collect::<Result<Reactions>>()?,
+                    ),
+                    None => message.reactions,
+                };
+                Ok(message)
+            }
+            None => Ok(message),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display, Shrinkwrap)]
+#[display(Debug)]
+pub struct Reactions(pub Vec<Reaction>);
+
+impl FromIterator<Reaction> for Reactions {
+    fn from_iter<T: IntoIterator<Item = Reaction>>(iter: T) -> Self {
+        Reactions(iter.into_iter().collect())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
+#[display(Debug)]
+pub struct Reaction {
+    pub name: String,
+    pub users: Vec<String>,
+    pub users_info: Option<Vec<User>>,
+    pub count: u16,
+}
+
+impl Reaction {
+    fn finalize_reaction(mut reaction: Reaction, users: &Users) -> Result<Reaction> {
+        reaction.users_info = Some({
+            reaction
+                .users
+                .iter()
+                .map(|user_id| {
+                    users.get(user_id).map_or(
+                        UserIdNotFoundInUserMapSnafu {
+                            user_id,
+                            user_map: format!("{:#?}", users),
+                        }
+                        .fail(),
+                        |user| Ok(user.clone()),
+                    )
+                })
+                .collect::<Result<Vec<User>>>()?
+        });
+        Ok(reaction)
     }
 }

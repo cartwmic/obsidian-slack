@@ -5,7 +5,7 @@ use obsidian_slack::{
     channels::{Channel, ChannelResponse},
     components::{FileName, ObsidianSlackComponents},
     get_slack_message,
-    messages::{Message, MessageAndThread, MessageResponse, Messages},
+    messages::{Message, MessageAndThread, MessageResponse, Messages, Reactions, Reaction},
     slack_http_client::SlackHttpClientConfigFeatureFlags,
     users::{User, UserResponse, Users},
 };
@@ -67,12 +67,19 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: Some(Reactions(vec![
+                    Reaction { 
+                        name: "my-reaction".to_string(), 
+                        users: vec!["mock_user_2".to_string()], 
+                        users_info: None, 
+                        count: 1 
+                    }
+                ]))
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -110,6 +117,14 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: Some(Reactions(vec![
+                            Reaction { 
+                                name: "my-reaction".to_string(), 
+                                users: vec!["mock_user_2".to_string()], 
+                                users_info: None, 
+                                count: 1 
+                            }
+                        ]))
                     }
                 ]
             ),
@@ -124,6 +139,14 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: Some(Reactions(vec![
+                            Reaction { 
+                                name: "my-reaction".to_string(), 
+                                users: vec!["mock_user_2".to_string()], 
+                                users_info: None, 
+                                count: 1 
+                            }
+                        ]))
                     }
                 ]
             ),
@@ -132,7 +155,7 @@ fn get_mock_request_function(
         users: None,
         channel: None
     }
-    ; "no thread_ts - no flags")]
+    ; "no thread_ts - no flags - with reactions")]
 #[test_case(
     MessageResponse {
         is_null: Some(false),
@@ -146,12 +169,100 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
+    },
+    UserResponse {
+        ok: Some(true),
+        error: None,
+        user: Some(User {
+            id: "mock_user".to_string(),
+            team_id: Some("mock_team".to_string()),
+            name: Some("mock_name".to_string()),
+            real_name: Some("mock_real_name".to_string()),
+        })
+    },
+    ChannelResponse {
+        error: None,
+        ok: Some(true),
+        channel: None 
+    },
+    "https://mock.slack.com/archives/C0000000000/p0000000000000000".to_string(),
+    SlackHttpClientConfigFeatureFlags {
+        get_users: false,
+        get_reactions: false,
+        get_channel_info: false,
+        get_attachments: false,
+        get_team_info: false,
+    },
+    ObsidianSlackComponents {
+        message_and_thread: MessageAndThread {
+            message: Messages (
+                vec![
+                    Message {
+                        r#type: Some("mock_type".to_string()),
+                        user: Some("mock_user".to_string()),
+                        user_info: None,
+                        text: Some("mock_text".to_string()),
+                        thread_ts: None,
+                        reply_count: None,
+                        team: Some("mock_team".to_string()),
+                        ts: Some("0000000000.000000".to_string()),
+                        reactions: None
+                    }
+                ]
+            ),
+            thread: Messages (
+                vec![
+                    Message {
+                        r#type: Some("mock_type".to_string()),
+                        user: Some("mock_user".to_string()),
+                        user_info: None,
+                        text: Some("mock_text".to_string()),
+                        thread_ts: None,
+                        reply_count: None,
+                        team: Some("mock_team".to_string()),
+                        ts: Some("0000000000.000000".to_string()),
+                        reactions: None
+                    }
+                ]
+            ),
+        },
+        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
+        users: None,
+        channel: None
+    }
+    ; "no thread_ts - no flags - no reactions")]
+#[test_case(
+    MessageResponse {
+        is_null: Some(false),
+        messages: Some(vec![
+            Message {
+                r#type: Some("mock_type".to_string()),
+                user: Some("mock_user".to_string()),
+                user_info: None,
+                text: Some("mock_text".to_string()),
+                thread_ts: None,
+                reply_count: None,
+                team: Some("mock_team".to_string()),
+                ts: Some("0000000000.000000".to_string()),
+                reactions: Some(Reactions(vec![
+                    Reaction { 
+                        name: "my-reaction".to_string(), 
+                        users: vec!["mock_user".to_string()], 
+                        users_info: None, 
+                        count: 1 
+                    }
+                ]))
+            }
+        ]),
+        has_more: Some(false),
+        ok: Some(true),
+        error: None,
     },
     UserResponse {
         ok: Some(true),
@@ -194,6 +305,21 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: Some(Reactions(vec![
+                            Reaction { 
+                                name: "my-reaction".to_string(), 
+                                users: vec!["mock_user".to_string()], 
+                                users_info: Some(vec![
+                                    User {
+                                        id: "mock_user".to_string(),
+                                        team_id: Some("mock_team".to_string()),
+                                        name: Some("mock_name".to_string()),
+                                        real_name: Some("mock_real_name".to_string()),
+                                    }
+                                ]), 
+                                count: 1 
+                            }
+                        ]))
                     }
                 ],
             ),
@@ -213,6 +339,21 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: Some(Reactions(vec![
+                            Reaction { 
+                                name: "my-reaction".to_string(), 
+                                users: vec!["mock_user".to_string()], 
+                                users_info: Some(vec![
+                                    User {
+                                        id: "mock_user".to_string(),
+                                        team_id: Some("mock_team".to_string()),
+                                        name: Some("mock_name".to_string()),
+                                        real_name: Some("mock_real_name".to_string()),
+                                    }
+                                ]), 
+                                count: 1 
+                            }
+                        ]))
                     }
                 ],
             ),
@@ -231,7 +372,7 @@ fn get_mock_request_function(
         )),
         channel: None
     }
-    ; "no thread_ts - user flag")]
+    ; "no thread_ts - user flag - reactions")]
 #[test_case(
     MessageResponse {
         is_null: Some(false),
@@ -245,6 +386,7 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             },
             Message {
                 r#type: Some("mock_type".to_string()),
@@ -255,12 +397,12 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000001".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -298,6 +440,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -312,6 +455,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     },
                     Message {
                         r#type: Some("mock_type".to_string()),
@@ -322,6 +466,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000001".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -344,6 +489,7 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             },
             Message {
                 r#type: Some("mock_type".to_string()),
@@ -354,12 +500,12 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000001".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -402,6 +548,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -421,6 +568,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     },
                     Message {
                         r#type: Some("mock_type".to_string()),
@@ -436,6 +584,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000001".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -468,6 +617,7 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             },
             Message {
                 r#type: Some("mock_type".to_string()),
@@ -478,12 +628,12 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000001".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -521,6 +671,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000001".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -535,6 +686,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     },
                     Message {
                         r#type: Some("mock_type".to_string()),
@@ -545,6 +697,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000001".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -567,6 +720,7 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             },
             Message {
                 r#type: Some("mock_type".to_string()),
@@ -577,12 +731,12 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000001".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -625,6 +779,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000001".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -644,6 +799,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     },
                     Message {
                         r#type: Some("mock_type".to_string()),
@@ -659,6 +815,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000001".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -691,12 +848,12 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -759,6 +916,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -773,6 +931,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -825,12 +984,12 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -903,6 +1062,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -922,6 +1082,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -984,12 +1145,12 @@ fn get_mock_request_function(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     },
     UserResponse {
         ok: Some(true),
@@ -1062,6 +1223,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -1081,6 +1243,7 @@ fn get_mock_request_function(
                         reply_count: None,
                         team: Some("mock_team".to_string()),
                         ts: Some("0000000000.000000".to_string()),
+                        reactions: None
                     }
                 ]
             ),
@@ -1244,7 +1407,6 @@ async fn get_slack_message_returns_data_correctly(
         has_more: Some(false),
         ok: Some(false),
         error: None,
-        response_metadata: None,
     }),
     None,
     None,
@@ -1274,12 +1436,12 @@ async fn get_slack_message_returns_data_correctly(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     }),
     Some(UserResponse {
         ok: Some(false),
@@ -1313,12 +1475,12 @@ async fn get_slack_message_returns_data_correctly(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             }
         ]),
         has_more: Some(false),
         ok: Some(true),
         error: None,
-        response_metadata: None,
     }),
     None,
     Some(ChannelResponse {
@@ -1364,11 +1526,11 @@ async fn get_slack_message_returns_error_messages_correctly(
                 reply_count: None,
                 team: Some("mock_team".to_string()),
                 ts: Some("0000000000.000000".to_string()),
+                reactions: None
             }]),
             has_more: Some(false),
             ok: Some(true),
             error: None,
-            response_metadata: None,
         }),
         user_response.unwrap_or(UserResponse {
             ok: Some(true),
