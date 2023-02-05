@@ -9,7 +9,7 @@ use crate::{
     messages::Message,
     response::{self, convert_result_string_to_object, SlackResponseValidator},
     slack_http_client::SlackHttpClient,
-    users::{CollectUser, User, Users},
+    users::{CollectUsers, User, UserIds, Users},
 };
 
 #[derive(Debug, Snafu)]
@@ -100,30 +100,31 @@ pub struct Channel {
     pub priority: Option<f64>,
 }
 
-impl CollectUser<Error> for Channel {
-    fn collect_users(&self) -> Result<Vec<String>> {
-        self.user
-            .as_ref()
-            .map_or(Ok(vec![]), |user_id| Ok(vec![user_id.to_owned()]))
+impl CollectUsers<Error> for Channel {
+    fn collect_users(&self) -> Result<UserIds> {
+        self.user.as_ref().map_or(Ok(vec![].into()), |user_id| {
+            Ok(vec![user_id.to_owned()].into())
+        })
     }
 }
 
 impl Channel {
     pub fn finalize_channel(mut channel: Channel, users: Option<&Users>) -> Result<Channel> {
         match (&channel.user, users) {
-            (Some(user_id), Some(users)) => users.get(user_id).map_or(
-                UserIdNotFoundInUserMapSnafu {
-                    user_id,
-                    user_map: format!("{:#?}", users),
-                }
-                .fail(),
-                |user| {
+            (Some(user_id), Some(users)) => {
+                if let Some(user) = users.get(user_id) {
                     Ok({
                         channel.user_info = Some(user.to_owned());
                         channel
                     })
-                },
-            ),
+                } else {
+                    UserIdNotFoundInUserMapSnafu {
+                        user_id,
+                        user_map: format!("{:#?}", users),
+                    }
+                    .fail()
+                }
+            }
             _ => Ok(channel),
         }
     }

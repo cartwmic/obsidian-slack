@@ -9,7 +9,7 @@ use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
     slack_http_client::SlackHttpClient,
     slack_url::SlackUrl,
-    users::{CollectUser, User, Users},
+    users::{CollectUsers, User, UserIds, Users},
 };
 
 #[derive(Debug, Snafu)]
@@ -32,10 +32,11 @@ pub enum Error {
     UserIdWasNoneInMessage { container: Message },
 
     #[snafu(display(
-        "Attempted to retrieve user ids for messages in message response, but found none: message_and_thread: {message_and_thread}"
+        "Attempted to retrieve user ids for messages in message response, but found none: message_and_thread: {message_and_thread} - previous_err: {previous_err}"
     ))]
     NoUsersFoundInMessageResponseOrThreadResponse {
         message_and_thread: MessageAndThread,
+        previous_err: Box<Error>,
     },
 
     #[snafu(display("Attempted to access messages in message response, but no messages found: {message_response}"))]
@@ -94,23 +95,27 @@ pub struct MessageAndThread {
     pub thread: Messages,
 }
 
-impl CollectUser<Error> for MessageAndThread {
-    fn collect_users(&self) -> Result<Vec<String>> {
+impl CollectUsers<Error> for MessageAndThread {
+    fn collect_users(&self) -> Result<UserIds> {
         self.message
             .collect_users()
             .and_then(|mut message_users| {
                 self.thread.collect_users().map(|thread_users| {
-                    message_users.extend(thread_users);
+                    message_users.extend(thread_users.0);
                     message_users
                 })
             })
-            .map_or(
-                NoUsersFoundInMessageResponseOrThreadResponseSnafu {
-                    message_and_thread: self.clone(),
-                }
-                .fail(),
+            .map_or_else(
+                |err| {
+                    NoUsersFoundInMessageResponseOrThreadResponseSnafu {
+                        message_and_thread: self.clone(),
+                        previous_err: Box::new(err),
+                    }
+                    .fail()
+                },
                 |user_ids| {
                     Ok(user_ids
+                        .0
                         .into_iter()
                         .collect::<HashSet<String>>()
                         .into_iter()
@@ -135,9 +140,7 @@ impl MessageAndThread {
 #[derive(Debug, Serialize, Deserialize, Clone, Display)]
 #[display(Debug)]
 pub struct MessageResponse {
-    pub is_null: Option<bool>,
     pub messages: Option<Vec<Message>>,
-    pub has_more: Option<bool>,
     pub ok: Option<bool>,
     pub error: Option<String>,
 }
@@ -172,8 +175,8 @@ impl SlackResponseValidator for MessageResponse {
 #[shrinkwrap(mutable)]
 pub struct Messages(pub Vec<Message>);
 
-impl CollectUser<Error> for Messages {
-    fn collect_users(&self) -> Result<Vec<String>> {
+impl CollectUsers<Error> for Messages {
+    fn collect_users(&self) -> Result<UserIds> {
         Ok(self
             .iter()
             .map(|message| -> Result<Vec<String>> {
@@ -226,46 +229,44 @@ pub struct Message {
     pub text: Option<String>,
     pub thread_ts: Option<String>,
     pub reply_count: Option<u16>,
-    pub team: Option<String>,
     pub ts: Option<String>,
     pub reactions: Option<Reactions>,
 }
 
 impl Message {
     fn finalize_message(mut message: Message, users: Option<&Users>) -> Result<Message> {
-        match users {
-            Some(users) => {
-                let user_id = message
-                    .user
-                    .as_ref()
-                    .expect("expected a user id, got None. This should never happen");
-                message = users.get(user_id).map_or(
-                    UserIdNotFoundInUserMapSnafu {
-                        user_id,
-                        user_map: format!("{:#?}", users),
-                    }
-                    .fail(),
-                    |user| {
-                        Ok({
-                            message.user_info = Some(user.to_owned());
-                            message
-                        })
-                    },
-                )?;
+        if let Some(users) = users {
+            let user_id = message
+                .user
+                .as_ref()
+                .expect("expected a user id, got None. This should never happen");
+            message = if let Some(user) = users.get(user_id) {
+                Ok({
+                    message.user_info = Some(user.to_owned());
+                    message
+                })
+            } else {
+                UserIdNotFoundInUserMapSnafu {
+                    user_id,
+                    user_map: format!("{:#?}", users),
+                }
+                .fail()
+            }?;
 
-                message.reactions = match message.reactions {
-                    Some(reactions) => Some(
-                        reactions
-                            .0
-                            .into_iter()
-                            .map(|reaction| Reaction::finalize_reaction(reaction, users))
-                            .collect::<Result<Reactions>>()?,
-                    ),
-                    None => message.reactions,
-                };
-                Ok(message)
-            }
-            None => Ok(message),
+            message.reactions = if let Some(reactions) = message.reactions {
+                Some(
+                    reactions
+                        .0
+                        .into_iter()
+                        .map(|reaction| Reaction::finalize_reaction(reaction, users))
+                        .collect::<Result<Reactions>>()?,
+                )
+            } else {
+                message.reactions
+            };
+            Ok(message)
+        } else {
+            Ok(message)
         }
     }
 }

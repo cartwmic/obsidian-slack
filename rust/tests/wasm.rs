@@ -1,22 +1,31 @@
-
+use core::panic;
+use std::collections::HashMap;
 
 use js_sys::JSON;
 use obsidian_slack::{
     channels::{Channel, ChannelResponse},
     components::{FileName, ObsidianSlackComponents},
     get_slack_message,
-    messages::{Message, MessageAndThread, MessageResponse, Messages, Reactions, Reaction},
+    messages::{Message, MessageAndThread, MessageResponse, Messages, Reaction, Reactions},
     slack_http_client::SlackHttpClientConfigFeatureFlags,
+    team::{Team, TeamResponse, Teams},
     users::{User, UserResponse, Users},
 };
-use test_case::test_case;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::{console_log, *};
 
+const DEFAULT_CHANNEL_ID: &str = "C0000000000";
+const DEFAULT_TS: &str = "p0000000000000000";
+const DEFAULT_TS_PARSED: &str = "0000000000.000000";
+const DEFAULT_THREAD_TS: &str = "0000000000.000000";
+const DEFAULT_USER_ID: &str = "mock_user";
+const DEFAULT_TEAM_ID: &str = "mock_team";
+
 fn get_mock_request_function(
     message_response: MessageResponse,
-    user_response: UserResponse,
-    channel_response: ChannelResponse
+    user_response: Option<UserResponse>,
+    channel_response: Option<ChannelResponse>,
+    team_response: Option<TeamResponse>,
 ) -> JsValue {
     let func_body = format!(
         r#"
@@ -28,6 +37,9 @@ fn get_mock_request_function(
                 return Promise.resolve(JSON.stringify({}))
             }}
             else if (params.url.includes("conversations.info")) {{
+                return Promise.resolve(JSON.stringify({}))
+            }}
+            else if (params.url.includes("team.info")) {{
                 return Promise.resolve(JSON.stringify({}))
             }}
             else {{
@@ -42,10 +54,39 @@ fn get_mock_request_function(
             JSON::stringify(&serde_wasm_bindgen::to_value(&message_response).unwrap()).unwrap()
         ),
         Into::<String>::into(
-            JSON::stringify(&serde_wasm_bindgen::to_value(&user_response).unwrap()).unwrap()
+            JSON::stringify(
+                &serde_wasm_bindgen::to_value(&user_response.unwrap_or_else(|| UserResponse {
+                    error: None,
+                    ok: Some(true),
+                    user: None
+                }))
+                .unwrap()
+            )
+            .unwrap()
         ),
         Into::<String>::into(
-            JSON::stringify(&serde_wasm_bindgen::to_value(&channel_response).unwrap()).unwrap()
+            JSON::stringify(
+                &serde_wasm_bindgen::to_value(&channel_response.unwrap_or_else(|| {
+                    ChannelResponse {
+                        error: None,
+                        ok: Some(true),
+                        channel: None,
+                    }
+                }))
+                .unwrap()
+            )
+            .unwrap()
+        ),
+        Into::<String>::into(
+            JSON::stringify(
+                &serde_wasm_bindgen::to_value(&team_response.unwrap_or_else(|| TeamResponse {
+                    error: None,
+                    ok: Some(true),
+                    team: None
+                }))
+                .unwrap()
+            )
+            .unwrap()
         )
     );
 
@@ -54,1262 +95,219 @@ fn get_mock_request_function(
     JsValue::from(func)
 }
 
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: Some(Reactions(vec![
-                    Reaction { 
-                        name: "my-reaction".to_string(), 
-                        users: vec!["mock_user_2".to_string()], 
-                        users_info: None, 
-                        count: 1 
-                    }
-                ]))
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: None 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: false,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: Some(Reactions(vec![
-                            Reaction { 
-                                name: "my-reaction".to_string(), 
-                                users: vec!["mock_user_2".to_string()], 
-                                users_info: None, 
-                                count: 1 
-                            }
-                        ]))
-                    }
-                ]
-            ),
-            thread: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: Some(Reactions(vec![
-                            Reaction { 
-                                name: "my-reaction".to_string(), 
-                                users: vec!["mock_user_2".to_string()], 
-                                users_info: None, 
-                                count: 1 
-                            }
-                        ]))
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: None,
-        channel: None
+fn channel(user: Option<User>, user_id: Option<String>) -> Channel {
+    Channel {
+        id: None,
+        name: None,
+        is_channel: None,
+        is_group: None,
+        is_im: None,
+        created: None,
+        creator: None,
+        is_archived: None,
+        is_general: None,
+        unlinked: None,
+        name_normalized: None,
+        is_read_only: None,
+        is_shared: None,
+        is_member: None,
+        is_private: None,
+        is_mpim: None,
+        last_read: None,
+        topic: None,
+        purpose: None,
+        previous_names: None,
+        locale: None,
+        is_org_shared: None,
+        user: user_id,
+        user_info: user,
+        latest: None,
+        unread_count: None,
+        unread_count_display: None,
+        is_open: None,
+        priority: None,
     }
-    ; "no thread_ts - no flags - with reactions")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: None 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: false,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: None,
-        channel: None
+}
+
+fn team() -> Team {
+    Team {
+        id: DEFAULT_TEAM_ID.to_string(),
+        name: "mock_team_name".to_string(),
+        domain: None,
+        email_domain: None,
+        enterprise_id: None,
+        enterprise_name: None,
     }
-    ; "no thread_ts - no flags - no reactions")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: Some(Reactions(vec![
-                    Reaction { 
-                        name: "my-reaction".to_string(), 
-                        users: vec!["mock_user".to_string()], 
-                        users_info: None, 
-                        count: 1 
-                    }
-                ]))
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: None 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: Some(Reactions(vec![
-                            Reaction { 
-                                name: "my-reaction".to_string(), 
-                                users: vec!["mock_user".to_string()], 
-                                users_info: Some(vec![
-                                    User {
-                                        id: "mock_user".to_string(),
-                                        team_id: Some("mock_team".to_string()),
-                                        name: Some("mock_name".to_string()),
-                                        real_name: Some("mock_real_name".to_string()),
-                                    }
-                                ]), 
-                                count: 1 
-                            }
-                        ]))
-                    }
-                ],
-            ),
-            thread: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: Some(Reactions(vec![
-                            Reaction { 
-                                name: "my-reaction".to_string(), 
-                                users: vec!["mock_user".to_string()], 
-                                users_info: Some(vec![
-                                    User {
-                                        id: "mock_user".to_string(),
-                                        team_id: Some("mock_team".to_string()),
-                                        name: Some("mock_name".to_string()),
-                                        real_name: Some("mock_real_name".to_string()),
-                                    }
-                                ]), 
-                                count: 1 
-                            }
-                        ]))
-                    }
-                ],
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: Some(Users(
-            [(
-                "mock_user".to_owned(),
-                User {
-                    id: "mock_user".to_string(),
-                    team_id: Some("mock_team".to_string()),
-                    name: Some("mock_name".to_string()),
-                    real_name: Some("mock_real_name".to_string()),
-                }
-            )].iter().cloned().collect()
-        )),
-        channel: None
+}
+
+fn user(team: Option<Team>) -> User {
+    User {
+        id: DEFAULT_USER_ID.to_string(),
+        team_id: Some(DEFAULT_TEAM_ID.to_string()),
+        team_info: team,
+        name: Some("mock_name".to_string()),
+        real_name: Some("mock_real_name".to_string()),
     }
-    ; "no thread_ts - user flag - reactions")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            },
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text2".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000001".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: None 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: false,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    },
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text2".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000001".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: None,
-        channel: None
+}
+
+fn reaction(user: Option<User>) -> Reaction {
+    Reaction {
+        name: "mock reaction".to_string(),
+        users: vec![DEFAULT_USER_ID.to_string()],
+        users_info: user.map(|user| vec![user]),
+        count: 1,
     }
-    ; "thread_ts - thread_ts and ts the same - no flags")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            },
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text2".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000001".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: None 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    },
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text2".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000001".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        channel: None,
-        users: Some(Users(
-            [(
-                "mock_user".to_owned(),
-                User {
-                    id: "mock_user".to_string(),
-                    team_id: Some("mock_team".to_string()),
-                    name: Some("mock_name".to_string()),
-                    real_name: Some("mock_real_name".to_string()),
-                }
-            )].iter().cloned().collect()
-        ))
+}
+
+fn message(
+    timestamp: String,
+    thread_timestamp: String,
+    user: Option<User>,
+    reactions: Option<Reactions>,
+) -> Message {
+    Message {
+        r#type: Some("mock_type".to_string()),
+        user: Some(DEFAULT_USER_ID.to_string()),
+        user_info: user,
+        text: Some("mock_text".to_string()),
+        thread_ts: Some(thread_timestamp),
+        reply_count: None,
+        ts: Some(timestamp),
+        reactions,
     }
-    ; "thread_ts - thread_ts and ts the same - user flag")]
-#[test_case(
+}
+
+fn messages(
+    timestamps: Vec<(String, String)>,
+    user: Option<User>,
+    reactions: Option<Reactions>,
+) -> Messages {
+    Messages(
+        timestamps
+            .into_iter()
+            .map(|(ts, thread_ts)| message(ts, thread_ts, user.clone(), reactions.clone()))
+            .collect(),
+    )
+}
+
+fn team_response(ok: Option<bool>, error: Option<String>, team: Option<Team>) -> TeamResponse {
+    TeamResponse { ok, error, team }
+}
+
+fn channel_response(
+    ok: Option<bool>,
+    error: Option<String>,
+    channel: Option<Channel>,
+) -> ChannelResponse {
+    ChannelResponse { ok, error, channel }
+}
+
+fn user_response(ok: Option<bool>, error: Option<String>, user: Option<User>) -> UserResponse {
+    UserResponse { ok, error, user }
+}
+
+fn message_response(
+    ok: Option<bool>,
+    error: Option<String>,
+    messages: Option<Messages>,
+) -> MessageResponse {
     MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            },
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text2".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000001".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: None 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000001?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: false,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text2".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000001".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    },
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text2".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000001".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000-0000000000.000001.json".to_string()),
-        channel: None,
-        users: None
+        messages: messages.map(|messages| messages.0),
+        ok,
+        error,
     }
-    ; "thread_ts - thread_ts and ts not the same - no flags")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            },
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text2".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000001".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: None 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000001?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text2".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000001".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages(
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    },
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text2".to_string()),
-                        thread_ts: Some("0000000000.000000".to_string()),
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000001".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000-0000000000.000001.json".to_string()),
-        channel: None,
-        users: Some(Users(
-            [(
-                "mock_user".to_owned(),
-                User {
-                    id: "mock_user".to_string(),
-                    team_id: Some("mock_team".to_string()),
-                    name: Some("mock_name".to_string()),
-                    real_name: Some("mock_real_name".to_string()),
-                }
-            )].iter().cloned().collect()
-        ))
+}
+
+fn url(channel_id: Option<String>, ts: Option<String>, thread_ts: Option<String>) -> String {
+    match (channel_id, ts, thread_ts) {
+        (Some(cid), None, None) => format!("https://mock.slack.com/archives/{cid}").to_string(),
+        (Some(cid), Some(ts), None) => {
+            format!("https://mock.slack.com/archives/{cid}/{ts}").to_string()
+        }
+        (Some(cid), None, Some(thread_ts)) => {
+            format!("https://mock.slack.com/archives/{cid}?thread_ts={thread_ts}").to_string()
+        }
+        (Some(cid), Some(ts), Some(thread_ts)) => {
+            format!("https://mock.slack.com/archives/{cid}/{ts}?thread_ts={thread_ts}").to_string()
+        }
+        (None, Some(ts), None) => format!("https://mock.slack.com/archives/{ts}").to_string(),
+        (None, Some(ts), Some(thread_ts)) => {
+            format!("https://mock.slack.com/archives/{ts}?thread_ts={thread_ts}").to_string()
+        }
+        (None, None, Some(thread_ts)) => {
+            format!("https://mock.slack.com/archives?thread_ts={thread_ts}").to_string()
+        }
+        (None, None, None) => format!("https://mock.slack.com/archives").to_string(),
     }
-    ; "thread_ts - thread_ts and ts not the same - user flag")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: None,
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: Some(Channel {
-            id: None,
-            name: None,
-            is_channel: None,
-            is_group: None,
-            is_im: None,
-            created: None,
-            creator: None,
-            is_archived: None,
-            is_general: None,
-            unlinked: None,
-            name_normalized: None,
-            is_read_only: None,
-            is_shared: None,
-            is_member: None,
-            is_private: None,
-            is_mpim: None,
-            last_read: None,
-            topic: None,
-            purpose: None,
-            previous_names: None,
-            locale: None,
-            is_org_shared: None,
-            user: None,
-            user_info: None,
-            latest: None,
-            unread_count: None,
-            unread_count_display: None,
-            is_open: None,
-            priority: None,
-        }) 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000".to_string(),
+}
+
+fn feature_flags(
+    get_users: bool,
+    get_channel_info: bool,
+    get_team_info: bool,
+) -> SlackHttpClientConfigFeatureFlags {
     SlackHttpClientConfigFeatureFlags {
-        get_users: false,
-        get_reactions: false,
-        get_channel_info: true,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: None,
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: None,
-        channel: Some(Channel {
-            id: None,
-            name: None,
-            is_channel: None,
-            is_group: None,
-            is_im: None,
-            created: None,
-            creator: None,
-            is_archived: None,
-            is_general: None,
-            unlinked: None,
-            name_normalized: None,
-            is_read_only: None,
-            is_shared: None,
-            is_member: None,
-            is_private: None,
-            is_mpim: None,
-            last_read: None,
-            topic: None,
-            purpose: None,
-            previous_names: None,
-            locale: None,
-            is_org_shared: None,
-            user: None,
-            user_info: None,
-            latest: None,
-            unread_count: None,
-            unread_count_display: None,
-            is_open: None,
-            priority: None,
-        })
+        get_users,
+        get_channel_info,
+        get_team_info,
     }
-    ; "only channel flag set")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
+}
+
+fn obsidian_slack_components(
+    message_and_thread: MessageAndThread,
+    file_name: FileName,
+    users: Option<Users>,
+    channel: Option<Channel>,
+    teams: Option<Teams>,
+) -> ObsidianSlackComponents {
+    ObsidianSlackComponents {
+        message_and_thread,
+        file_name,
+        users,
+        channel,
+        teams,
+    }
+}
+
+fn message_and_thread(message: Messages, thread: Messages) -> MessageAndThread {
+    MessageAndThread { message, thread }
+}
+
+fn file_name(
+    channel_id: Option<String>,
+    ts: Option<String>,
+    thread_ts: Option<String>,
+) -> FileName {
+    match (channel_id, ts, thread_ts) {
+        (Some(cid), Some(ts), None) => FileName(format!("{cid}-{ts}.json").to_string()),
+        (Some(cid), Some(ts), Some(thread_ts)) => {
+            if ts == thread_ts {
+                FileName(format!("{cid}-{ts}.json").to_string())
+            } else {
+                FileName(format!("{cid}-{thread_ts}-{ts}.json").to_string())
             }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: Some(Channel {
-            id: None,
-            name: None,
-            is_channel: None,
-            is_group: None,
-            is_im: None,
-            created: None,
-            creator: None,
-            is_archived: None,
-            is_general: None,
-            unlinked: None,
-            name_normalized: None,
-            is_read_only: None,
-            is_shared: None,
-            is_member: None,
-            is_private: None,
-            is_mpim: None,
-            last_read: None,
-            topic: None,
-            purpose: None,
-            previous_names: None,
-            locale: None,
-            is_org_shared: None,
-            user: None,
-            user_info: None,
-            latest: None,
-            unread_count: None,
-            unread_count_display: None,
-            is_open: None,
-            priority: None,
-        }) 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: true,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: Some(Users(
-            [(
-                "mock_user".to_owned(),
-                User {
-                    id: "mock_user".to_string(),
-                    team_id: Some("mock_team".to_string()),
-                    name: Some("mock_name".to_string()),
-                    real_name: Some("mock_real_name".to_string()),
-                }
-            )].iter().cloned().collect()
-        )),
-        channel: Some(Channel {
-            id: None,
-            name: None,
-            is_channel: None,
-            is_group: None,
-            is_im: None,
-            created: None,
-            creator: None,
-            is_archived: None,
-            is_general: None,
-            unlinked: None,
-            name_normalized: None,
-            is_read_only: None,
-            is_shared: None,
-            is_member: None,
-            is_private: None,
-            is_mpim: None,
-            last_read: None,
-            topic: None,
-            purpose: None,
-            previous_names: None,
-            locale: None,
-            is_org_shared: None,
-            user: None,
-            user_info: None,
-            latest: None,
-            unread_count: None,
-            unread_count_display: None,
-            is_open: None,
-            priority: None,
-        })
+        }
+        _ => panic!("unsupported filename in test suite"),
     }
-    ; "channel and user flag set, channel has no user")]
-#[test_case(
-    MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    },
-    UserResponse {
-        ok: Some(true),
-        error: None,
-        user: Some(User {
-            id: "mock_user".to_string(),
-            team_id: Some("mock_team".to_string()),
-            name: Some("mock_name".to_string()),
-            real_name: Some("mock_real_name".to_string()),
-        })
-    },
-    ChannelResponse {
-        error: None,
-        ok: Some(true),
-        channel: Some(Channel {
-            id: None,
-            name: None,
-            is_channel: None,
-            is_group: None,
-            is_im: None,
-            created: None,
-            creator: None,
-            is_archived: None,
-            is_general: None,
-            unlinked: None,
-            name_normalized: None,
-            is_read_only: None,
-            is_shared: None,
-            is_member: None,
-            is_private: None,
-            is_mpim: None,
-            last_read: None,
-            topic: None,
-            purpose: None,
-            previous_names: None,
-            locale: None,
-            is_org_shared: None,
-            user: Some("mock_user".to_string()),
-            user_info: None,
-            latest: None,
-            unread_count: None,
-            unread_count_display: None,
-            is_open: None,
-            priority: None,
-        }) 
-    },
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: true,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    ObsidianSlackComponents {
-        message_and_thread: MessageAndThread {
-            message: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-            thread: Messages (
-                vec![
-                    Message {
-                        r#type: Some("mock_type".to_string()),
-                        user: Some("mock_user".to_string()),
-                        user_info: Some(User {
-                            id: "mock_user".to_string(),
-                            team_id: Some("mock_team".to_string()),
-                            name: Some("mock_name".to_string()),
-                            real_name: Some("mock_real_name".to_string()),
-                        }),
-                        text: Some("mock_text".to_string()),
-                        thread_ts: None,
-                        reply_count: None,
-                        team: Some("mock_team".to_string()),
-                        ts: Some("0000000000.000000".to_string()),
-                        reactions: None
-                    }
-                ]
-            ),
-        },
-        file_name: FileName("C0000000000-0000000000.000000.json".to_string()),
-        users: Some(Users(
-            [(
-                "mock_user".to_owned(),
-                User {
-                    id: "mock_user".to_string(),
-                    team_id: Some("mock_team".to_string()),
-                    name: Some("mock_name".to_string()),
-                    real_name: Some("mock_real_name".to_string()),
-                }
-            )].iter().cloned().collect()
-        )),
-        channel: Some(Channel {
-            id: None,
-            name: None,
-            is_channel: None,
-            is_group: None,
-            is_im: None,
-            created: None,
-            creator: None,
-            is_archived: None,
-            is_general: None,
-            unlinked: None,
-            name_normalized: None,
-            is_read_only: None,
-            is_shared: None,
-            is_member: None,
-            is_private: None,
-            is_mpim: None,
-            last_read: None,
-            topic: None,
-            purpose: None,
-            previous_names: None,
-            locale: None,
-            is_org_shared: None,
-            user: Some("mock_user".to_string()),
-            user_info: Some(User {
-                id: "mock_user".to_string(),
-                team_id: Some("mock_team".to_string()),
-                name: Some("mock_name".to_string()),
-                real_name: Some("mock_real_name".to_string()),
-            }),
-            latest: None,
-            unread_count: None,
-            unread_count_display: None,
-            is_open: None,
-            priority: None,
-        })
-    }
-    ; "channel and user flag set, channel has user")]
-#[wasm_bindgen_test]
-async fn get_slack_message_returns_data_correctly(
+}
+
+async fn get_slack_message_returns_data_correctly_common(
     message_response: MessageResponse,
-    user_response: UserResponse,
-    channel_response: ChannelResponse,
+    user_response: Option<UserResponse>,
+    channel_response: Option<ChannelResponse>,
+    team_response: Option<TeamResponse>,
     url: String,
     feature_flags: SlackHttpClientConfigFeatureFlags,
     expected_return_data: ObsidianSlackComponents,
 ) {
     let feature_flags = serde_wasm_bindgen::to_value(&feature_flags).unwrap();
 
-    let request_func = get_mock_request_function(message_response, user_response, channel_response);
+    let request_func = get_mock_request_function(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+    );
 
     let api_token = "xoxc...";
     let cookie = "xoxd...";
@@ -1323,7 +321,6 @@ async fn get_slack_message_returns_data_correctly(
     )
     .await;
 
-    console_log!("Result: {:#?}", result);
     assert!(!result.is_string(), "Result was a string: {:#?}", result);
 
     let result: ObsidianSlackComponents =
@@ -1332,180 +329,711 @@ async fn get_slack_message_returns_data_correctly(
     assert_eq!(expected_return_data, result);
 }
 
-#[test_case(
-    None,
-    None,
-    None,
-    "bad_token".to_string(),
-    "xoxd...".to_string(),
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    "InvalidSlackApiToken"
-    ; "bad api token"
-)]
-#[test_case(
-    None,
-    None,
-    None,
-    "xoxc...".to_string(),
-    "bad cookie".to_string(),
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    "InvalidSlackApiCookie"
-    ; "bad cookie"
-)]
-#[test_case(
-    None,
-    None,
-    None,
-    "xoxc...".to_string(),
-    "xoxd...".to_string(),
-    "https://mock.slack.com/archives/bad_channel_id/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    "ChannelIdNotFoundInPathSegments"
-    ; "bad channel_id"
-)]
-#[test_case(
-    None,
-    None,
-    None,
-    "xoxc...".to_string(),
-    "xoxd...".to_string(),
-    "https://mock.slack.com/archives/C0000000000/bad_ts?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    "TimestampNotFound"
-    ; "bad ts"
-)]
-#[test_case(
-    Some(MessageResponse {
-        is_null: Some(false),
-        messages: None,
-        has_more: Some(false),
-        ok: Some(false),
-        error: None,
-    }),
-    None,
-    None,
-    "xoxc...".to_string(),
-    "xoxd...".to_string(),
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    "InvalidMessageResponse"
-    ; "message response not ok - no flags"
-)]
-#[test_case(
-    Some(MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    }),
-    Some(UserResponse {
-        ok: Some(false),
-        error: None,
-        user: None
-    }),
-    None,
-    "xoxc...".to_string(),
-    "xoxd...".to_string(),
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: true,
-        get_reactions: false,
-        get_channel_info: false,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    "InvalidUserResponse"
-    ; "user response not ok - user flag"
-)]
-#[test_case(
-    Some(MessageResponse {
-        is_null: Some(false),
-        messages: Some(vec![
-            Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: None,
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            }
-        ]),
-        has_more: Some(false),
-        ok: Some(true),
-        error: None,
-    }),
-    None,
-    Some(ChannelResponse {
-        ok: Some(false),
-        error: None,
-        channel: None
-    }),
-    "xoxc...".to_string(),
-    "xoxd...".to_string(),
-    "https://mock.slack.com/archives/C0000000000/p0000000000000000?thread_ts=0000000000.000000".to_string(),
-    SlackHttpClientConfigFeatureFlags {
-        get_users: false,
-        get_reactions: false,
-        get_channel_info: true,
-        get_attachments: false,
-        get_team_info: false,
-    },
-    "InvalidChannelResponse"
-    ; "channel response not ok - channel flag"
-)]
 #[wasm_bindgen_test]
-async fn get_slack_message_returns_error_messages_correctly(
-    message_response: Option<MessageResponse>,
+async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_just_ts_in_url_and_one_message(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            None,
+        )),
+    );
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                None,
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                None,
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        None,
+        None,
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_just_ts_and_multiple_messages(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![
+                (DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string()),
+                (
+                    DEFAULT_TS_PARSED.to_string() + "1",
+                    DEFAULT_THREAD_TS.to_string(),
+                ),
+            ],
+            None,
+            None,
+        )),
+    );
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                None,
+            ),
+            messages(
+                vec![
+                    (DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string()),
+                    (
+                        DEFAULT_TS_PARSED.to_string() + "1",
+                        DEFAULT_THREAD_TS.to_string(),
+                    ),
+                ],
+                None,
+                None,
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        None,
+        None,
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_ts_and_thread_ts_that_are_the_same_and_multiple_messages(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![
+                (DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string()),
+                (
+                    DEFAULT_TS_PARSED.to_string() + "1",
+                    DEFAULT_THREAD_TS.to_string(),
+                ),
+            ],
+            None,
+            None,
+        )),
+    );
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        Some(DEFAULT_THREAD_TS.to_string()),
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                None,
+            ),
+            messages(
+                vec![
+                    (DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string()),
+                    (
+                        DEFAULT_TS_PARSED.to_string() + "1",
+                        DEFAULT_THREAD_TS.to_string(),
+                    ),
+                ],
+                None,
+                None,
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            Some(DEFAULT_THREAD_TS.to_string()),
+        ),
+        None,
+        None,
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_ts_and_thread_ts_that_are_different_and_multiple_messages(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![
+                (DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string()),
+                (
+                    DEFAULT_TS_PARSED.to_string() + "1",
+                    DEFAULT_THREAD_TS.to_string(),
+                ),
+            ],
+            None,
+            None,
+        )),
+    );
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string() + "1"),
+        Some(DEFAULT_THREAD_TS.to_string()),
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(
+                    DEFAULT_TS_PARSED.to_string() + "1",
+                    DEFAULT_THREAD_TS.to_string(),
+                )],
+                None,
+                None,
+            ),
+            messages(
+                vec![
+                    (DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string()),
+                    (
+                        DEFAULT_TS_PARSED.to_string() + "1",
+                        DEFAULT_THREAD_TS.to_string(),
+                    ),
+                ],
+                None,
+                None,
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string() + "1"),
+            Some(DEFAULT_THREAD_TS.to_string()),
+        ),
+        None,
+        None,
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_just_ts_in_url_and_one_message_with_reactions(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            Some(Reactions(vec![reaction(None)])),
+        )),
+    );
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                Some(Reactions(vec![reaction(None)])),
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                Some(Reactions(vec![reaction(None)])),
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        None,
+        None,
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_with_at_least_channel_info_flag_set() {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            Some(Reactions(vec![reaction(None)])),
+        )),
+    );
+    let user_response = None;
+    let channel_response = Some(channel_response(
+        Some(true),
+        None,
+        Some(channel(None, None)),
+    ));
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, true, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                Some(Reactions(vec![reaction(None)])),
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                None,
+                Some(Reactions(vec![reaction(None)])),
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        None,
+        Some(channel(None, None)),
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_channel_info_flag_not_set(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            Some(Reactions(vec![reaction(None)])),
+        )),
+    );
+    let user_response = Some(user_response(Some(true), None, Some(user(None))));
+    let channel_response = None;
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(true, false, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(None)),
+                Some(Reactions(vec![reaction(Some(user(None)))])),
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(None)),
+                Some(Reactions(vec![reaction(Some(user(None)))])),
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        Some(Users(
+            vec![(DEFAULT_USER_ID.to_string(), user(None))]
+                .into_iter()
+                .collect(),
+        )),
+        None,
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_channel_info_flag_set_and_channel_does_not_have_user(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            Some(Reactions(vec![reaction(None)])),
+        )),
+    );
+    let user_response = Some(user_response(Some(true), None, Some(user(None))));
+    let channel_response = Some(channel_response(
+        Some(true),
+        None,
+        Some(channel(None, None)),
+    ));
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(true, true, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(None)),
+                Some(Reactions(vec![reaction(Some(user(None)))])),
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(None)),
+                Some(Reactions(vec![reaction(Some(user(None)))])),
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        Some(Users(
+            vec![(DEFAULT_USER_ID.to_string(), user(None))]
+                .into_iter()
+                .collect(),
+        )),
+        Some(channel(None, None)),
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_channel_info_flag_set_and_channel_does_have_user(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            Some(Reactions(vec![reaction(None)])),
+        )),
+    );
+    let user_response = Some(user_response(Some(true), None, Some(user(None))));
+    let channel_response = Some(channel_response(
+        Some(true),
+        None,
+        Some(channel(None, Some(DEFAULT_USER_ID.to_string()))),
+    ));
+    let team_response = None;
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(true, true, false);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(None)),
+                Some(Reactions(vec![reaction(Some(user(None)))])),
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(None)),
+                Some(Reactions(vec![reaction(Some(user(None)))])),
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        Some(Users(
+            vec![(DEFAULT_USER_ID.to_string(), user(None))]
+                .into_iter()
+                .collect(),
+        )),
+        Some(channel(Some(user(None)), Some(DEFAULT_USER_ID.to_string()))),
+        None,
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_team_info_flag_set() {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            Some(Reactions(vec![reaction(None)])),
+        )),
+    );
+    let user_response = Some(user_response(Some(true), None, Some(user(None))));
+    let channel_response = None;
+    let team_response = Some(team_response(Some(true), None, Some(team())));
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(true, false, true);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(Some(team()))),
+                Some(Reactions(vec![reaction(Some(user(Some(team()))))])),
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(Some(team()))),
+                Some(Reactions(vec![reaction(Some(user(Some(team()))))])),
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        Some(Users(
+            vec![(DEFAULT_USER_ID.to_string(), user(Some(team())))]
+                .into_iter()
+                .collect(),
+        )),
+        None,
+        Some(Teams(
+            vec![(DEFAULT_TEAM_ID.to_string(), team())]
+                .into_iter()
+                .collect(),
+        )),
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_channel_info_flag_set_and_channel_does_have_user_and_team_info_flag_set(
+) {
+    let message_response = message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+            None,
+            Some(Reactions(vec![reaction(None)])),
+        )),
+    );
+    let user_response = Some(user_response(Some(true), None, Some(user(None))));
+    let channel_response = Some(channel_response(
+        Some(true),
+        None,
+        Some(channel(None, Some(DEFAULT_USER_ID.to_string()))),
+    ));
+    let team_response = Some(team_response(Some(true), None, Some(team())));
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(true, true, true);
+    let expected_return_data = obsidian_slack_components(
+        message_and_thread(
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(Some(team()))),
+                Some(Reactions(vec![reaction(Some(user(Some(team()))))])),
+            ),
+            messages(
+                vec![(DEFAULT_TS_PARSED.to_string(), DEFAULT_THREAD_TS.to_string())],
+                Some(user(Some(team()))),
+                Some(Reactions(vec![reaction(Some(user(Some(team()))))])),
+            ),
+        ),
+        file_name(
+            Some(DEFAULT_CHANNEL_ID.to_string()),
+            Some(DEFAULT_TS_PARSED.to_string()),
+            None,
+        ),
+        Some(Users(
+            vec![(DEFAULT_USER_ID.to_string(), user(Some(team())))]
+                .into_iter()
+                .collect(),
+        )),
+        Some(channel(
+            Some(user(Some(team()))),
+            Some(DEFAULT_USER_ID.to_string()),
+        )),
+        Some(Teams(
+            vec![(DEFAULT_TEAM_ID.to_string(), team())]
+                .into_iter()
+                .collect(),
+        )),
+    );
+
+    get_slack_message_returns_data_correctly_common(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        url,
+        feature_flags,
+        expected_return_data,
+    )
+    .await;
+}
+
+async fn get_slack_message_returns_error_messages_correctly_base(
+    the_message_response: Option<MessageResponse>,
     user_response: Option<UserResponse>,
     channel_response: Option<ChannelResponse>,
+    team_response: Option<TeamResponse>,
     api_token: String,
     cookie: String,
     url: String,
@@ -1515,38 +1043,10 @@ async fn get_slack_message_returns_error_messages_correctly(
     let feature_flags = serde_wasm_bindgen::to_value(&feature_flags).unwrap();
 
     let request_func = get_mock_request_function(
-        message_response.unwrap_or(MessageResponse {
-            is_null: Some(false),
-            messages: Some(vec![Message {
-                r#type: Some("mock_type".to_string()),
-                user: Some("mock_user".to_string()),
-                user_info: None,
-                text: Some("mock_text".to_string()),
-                thread_ts: Some("0000000000.000000".to_string()),
-                reply_count: None,
-                team: Some("mock_team".to_string()),
-                ts: Some("0000000000.000000".to_string()),
-                reactions: None
-            }]),
-            has_more: Some(false),
-            ok: Some(true),
-            error: None,
-        }),
-        user_response.unwrap_or(UserResponse {
-            ok: Some(true),
-            error: None,
-            user: Some(User {
-                id: "mock_user".to_string(),
-                team_id: Some("mock_team".to_string()),
-                name: Some("mock_name".to_string()),
-                real_name: Some("mock_real_name".to_string()),
-            }),
-        }),
-        channel_response.unwrap_or(ChannelResponse {
-            error: None,
-            ok: Some(true),
-            channel: None, 
-        })
+        the_message_response.unwrap_or_else(|| message_response(Some(true), None, None)),
+        user_response,
+        channel_response,
+        team_response,
     );
 
     let result = get_slack_message(
@@ -1558,7 +1058,267 @@ async fn get_slack_message_returns_error_messages_correctly(
     )
     .await;
 
-    console_log!("Result: {:#?}", result);
     assert!(result.is_string(), "Result was not a string: {:#?}", result);
-    assert!(result.as_string().unwrap().contains(expected_error))
+    assert!(
+        result.as_string().unwrap().contains(expected_error),
+        "Result did not contain expected error of {:#?} \n instead got {:#?}",
+        expected_error,
+        result
+    )
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_invalid_api_token() {
+    let message_response = None;
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let api_token = "bad_token".to_string();
+    let cookie = "xoxd...".to_string();
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_error = "InvalidSlackApiToken";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_invalid_api_cookie() {
+    let message_response = None;
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let api_token = "xoxc...".to_string();
+    let cookie = "...".to_string();
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_error = "InvalidSlackApiCookie";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_missing_channel_id() {
+    let message_response = None;
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let api_token = "xoxc...".to_string();
+    let cookie = "xoxd...".to_string();
+    let url = url(None, Some(DEFAULT_TS.to_string()), None);
+    let feature_flags = feature_flags(false, false, false);
+    let expected_error = "ChannelIdNotFoundInPathSegments";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_missing_timestamp() {
+    let message_response = None;
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let api_token = "xoxc...".to_string();
+    let cookie = "xoxd...".to_string();
+    let url = url(Some(DEFAULT_CHANNEL_ID.to_string()), None, None);
+    let feature_flags = feature_flags(false, false, false);
+    let expected_error = "TimestampNotFound";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_invalid_message_response() {
+    let message_response = Some(message_response(Some(false), None, None));
+    let user_response = None;
+    let channel_response = None;
+    let team_response = None;
+    let api_token = "xoxc...".to_string();
+    let cookie = "xoxd...".to_string();
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, false, false);
+    let expected_error = "InvalidMessageResponse";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_invalid_user_response() {
+    let message_response = Some(message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), "".to_string())],
+            None,
+            None,
+        )),
+    ));
+    let user_response = Some(user_response(Some(false), None, None));
+    let channel_response = None;
+    let team_response = None;
+    let api_token = "xoxc...".to_string();
+    let cookie = "xoxd...".to_string();
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(true, false, false);
+    let expected_error = "InvalidUserResponse";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_invalid_channel_response() {
+    let message_response = Some(message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), "".to_string())],
+            None,
+            None,
+        )),
+    ));
+    let channel_response = Some(channel_response(Some(false), None, None));
+    let user_response = None;
+    let team_response = None;
+    let api_token = "xoxc...".to_string();
+    let cookie = "xoxd...".to_string();
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(false, true, false);
+    let expected_error = "InvalidChannelResponse";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
+}
+
+#[wasm_bindgen_test]
+async fn get_slack_message_returns_invalid_team_response() {
+    let message_response = Some(message_response(
+        Some(true),
+        None,
+        Some(messages(
+            vec![(DEFAULT_TS_PARSED.to_string(), "".to_string())],
+            None,
+            None,
+        )),
+    ));
+    let user_response = Some(user_response(Some(true), None, Some(user(None))));
+    let channel_response = None;
+    let team_response = Some(team_response(Some(false), None, None));
+    let api_token = "xoxc...".to_string();
+    let cookie = "xoxd...".to_string();
+    let url = url(
+        Some(DEFAULT_CHANNEL_ID.to_string()),
+        Some(DEFAULT_TS.to_string()),
+        None,
+    );
+    let feature_flags = feature_flags(true, false, true);
+    let expected_error = "InvalidTeamResponse";
+
+    get_slack_message_returns_error_messages_correctly_base(
+        message_response,
+        user_response,
+        channel_response,
+        team_response,
+        api_token,
+        cookie,
+        url,
+        feature_flags,
+        expected_error,
+    )
+    .await;
 }

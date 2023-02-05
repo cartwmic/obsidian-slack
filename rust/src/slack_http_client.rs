@@ -65,9 +65,7 @@ pub struct SlackHttpClientConfig {
 #[display(Debug)]
 pub struct SlackHttpClientConfigFeatureFlags {
     pub get_users: bool,
-    pub get_reactions: bool,
     pub get_channel_info: bool,
-    pub get_attachments: bool,
     pub get_team_info: bool,
 }
 
@@ -243,6 +241,22 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         log::info!("{}|build request url", &log_prefix);
         let request_url =
             self.build_request_uri("conversations.info", vec![("channel", channel_id)]);
+
+        log::info!("{}|build request object", &log_prefix);
+        let the_request = self
+            .build_base_get_request()
+            .with_url(request_url.to_string());
+
+        log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);
+        (self.request_func)(the_request)
+    }
+
+    pub fn get_team_info(&self, team_id: &str) -> ClientReturnType {
+        let log_prefix = "rust|get_team_info";
+        log::info!("{}|team_id={}", &log_prefix, team_id);
+
+        log::info!("{}|build request url", &log_prefix);
+        let request_url = self.build_request_uri("team.info", vec![("team", team_id)]);
 
         log::info!("{}|build request object", &log_prefix);
         let the_request = self

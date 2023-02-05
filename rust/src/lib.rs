@@ -12,6 +12,7 @@ mod response;
 pub mod slack_http_client;
 mod slack_url;
 mod state_machine;
+pub mod team;
 pub mod users;
 mod utils;
 
