@@ -190,8 +190,7 @@ impl CollectUsers<Error> for Messages {
                 let mut reactions_users = message.reactions.as_ref().map_or(vec![], |reactions| {
                     reactions
                         .iter()
-                        .map(|reaction| reaction.users.clone())
-                        .flatten()
+                        .flat_map(|reaction| reaction.users.clone())
                         .collect::<Vec<String>>()
                 });
                 reactions_users.push(message_user);

@@ -1,5 +1,4 @@
 use core::panic;
-use std::collections::HashMap;
 
 use js_sys::JSON;
 use obsidian_slack::{
@@ -12,7 +11,7 @@ use obsidian_slack::{
     users::{User, UserResponse, Users},
 };
 use wasm_bindgen::JsValue;
-use wasm_bindgen_test::{console_log, *};
+use wasm_bindgen_test::*;
 
 const DEFAULT_CHANNEL_ID: &str = "C0000000000";
 const DEFAULT_TS: &str = "p0000000000000000";
@@ -55,7 +54,7 @@ fn get_mock_request_function(
         ),
         Into::<String>::into(
             JSON::stringify(
-                &serde_wasm_bindgen::to_value(&user_response.unwrap_or_else(|| UserResponse {
+                &serde_wasm_bindgen::to_value(&user_response.unwrap_or(UserResponse {
                     error: None,
                     ok: Some(true),
                     user: None
@@ -66,7 +65,7 @@ fn get_mock_request_function(
         ),
         Into::<String>::into(
             JSON::stringify(
-                &serde_wasm_bindgen::to_value(&channel_response.unwrap_or_else(|| {
+                &serde_wasm_bindgen::to_value(&channel_response.unwrap_or({
                     ChannelResponse {
                         error: None,
                         ok: Some(true),
@@ -79,7 +78,7 @@ fn get_mock_request_function(
         ),
         Into::<String>::into(
             JSON::stringify(
-                &serde_wasm_bindgen::to_value(&team_response.unwrap_or_else(|| TeamResponse {
+                &serde_wasm_bindgen::to_value(&team_response.unwrap_or(TeamResponse {
                     error: None,
                     ok: Some(true),
                     team: None
@@ -220,24 +219,24 @@ fn message_response(
 
 fn url(channel_id: Option<String>, ts: Option<String>, thread_ts: Option<String>) -> String {
     match (channel_id, ts, thread_ts) {
-        (Some(cid), None, None) => format!("https://mock.slack.com/archives/{cid}").to_string(),
+        (Some(cid), None, None) => format!("https://mock.slack.com/archives/{cid}"),
         (Some(cid), Some(ts), None) => {
-            format!("https://mock.slack.com/archives/{cid}/{ts}").to_string()
+            format!("https://mock.slack.com/archives/{cid}/{ts}")
         }
         (Some(cid), None, Some(thread_ts)) => {
-            format!("https://mock.slack.com/archives/{cid}?thread_ts={thread_ts}").to_string()
+            format!("https://mock.slack.com/archives/{cid}?thread_ts={thread_ts}")
         }
         (Some(cid), Some(ts), Some(thread_ts)) => {
-            format!("https://mock.slack.com/archives/{cid}/{ts}?thread_ts={thread_ts}").to_string()
+            format!("https://mock.slack.com/archives/{cid}/{ts}?thread_ts={thread_ts}")
         }
-        (None, Some(ts), None) => format!("https://mock.slack.com/archives/{ts}").to_string(),
+        (None, Some(ts), None) => format!("https://mock.slack.com/archives/{ts}"),
         (None, Some(ts), Some(thread_ts)) => {
-            format!("https://mock.slack.com/archives/{ts}?thread_ts={thread_ts}").to_string()
+            format!("https://mock.slack.com/archives/{ts}?thread_ts={thread_ts}")
         }
         (None, None, Some(thread_ts)) => {
-            format!("https://mock.slack.com/archives?thread_ts={thread_ts}").to_string()
+            format!("https://mock.slack.com/archives?thread_ts={thread_ts}")
         }
-        (None, None, None) => format!("https://mock.slack.com/archives").to_string(),
+        (None, None, None) => "https://mock.slack.com/archives".to_string(),
     }
 }
 
@@ -279,12 +278,12 @@ fn file_name(
     thread_ts: Option<String>,
 ) -> FileName {
     match (channel_id, ts, thread_ts) {
-        (Some(cid), Some(ts), None) => FileName(format!("{cid}-{ts}.json").to_string()),
+        (Some(cid), Some(ts), None) => FileName(format!("{cid}-{ts}.json")),
         (Some(cid), Some(ts), Some(thread_ts)) => {
             if ts == thread_ts {
-                FileName(format!("{cid}-{ts}.json").to_string())
+                FileName(format!("{cid}-{ts}.json"))
             } else {
-                FileName(format!("{cid}-{thread_ts}-{ts}.json").to_string())
+                FileName(format!("{cid}-{thread_ts}-{ts}.json"))
             }
         }
         _ => panic!("unsupported filename in test suite"),
