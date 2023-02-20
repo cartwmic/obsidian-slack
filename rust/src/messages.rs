@@ -172,7 +172,7 @@ impl MessageAndThread {
     pub fn collect_file_links(&self) -> FileLinks {
         self.thread
             .iter()
-            .map(|message| {
+            .filter_map(|message| {
                 message.files.as_ref().map(|files| {
                     files
                         .iter()
@@ -184,7 +184,6 @@ impl MessageAndThread {
                         .collect::<Vec<(String, String)>>()
                 })
             })
-            .flatten()
             .flatten()
             .collect()
     }

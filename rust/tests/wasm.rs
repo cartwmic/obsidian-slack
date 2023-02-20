@@ -1164,8 +1164,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_set_only()
     let team_response = None;
     let file_data = Some(
         files_data()
-            .values()
-            .map(|file_data| file_data.clone())
+            .values().cloned()
             .collect::<Vec<String>>()
             .index(0)
             .clone(),
@@ -1232,8 +1231,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_user_f
     let team_response = None;
     let file_data = Some(
         files_data()
-            .values()
-            .map(|file_data| file_data.clone())
+            .values().cloned()
             .collect::<Vec<String>>()
             .index(0)
             .clone(),
@@ -1308,8 +1306,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_channe
     let team_response = None;
     let file_data = Some(
         files_data()
-            .values()
-            .map(|file_data| file_data.clone())
+            .values().cloned()
             .collect::<Vec<String>>()
             .index(0)
             .clone(),
@@ -1376,8 +1373,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_and_user_and_te
     let team_response = Some(team_response(Some(true), None, Some(team())));
     let file_data = Some(
         files_data()
-            .values()
-            .map(|file_data| file_data.clone())
+            .values().cloned()
             .collect::<Vec<String>>()
             .index(0)
             .clone(),
