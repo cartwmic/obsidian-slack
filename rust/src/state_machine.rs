@@ -33,6 +33,9 @@ pub enum Error {
     #[snafu(display("Could not get teams from components - source: {source}"))]
     CouldNotCollectTeamsFromComponents { source: components::Error },
 
+    #[snafu(display("Could not get file data from slack - source: {source}"))]
+    CouldNotGetFileDataFromSlack { source: messages::Error },
+
     #[snafu(display("Transition from state: {state} with flags {flags} was invalid"))]
     InvalidStateTransition {
         state: ObsidianSlackStates,
@@ -50,6 +53,7 @@ pub enum ObsidianSlackStates {
     ChannelInfo,
     UserInfo,
     TeamInfo,
+    Files,
     End,
 }
 #[derive(Debug)]
@@ -72,6 +76,7 @@ impl ObsidianSlackStateMachine {
                     get_users: _,
                     get_channel_info: _,
                     get_team_info: _,
+                    get_file_data: _,
                 },
             ) => ObsidianSlackStateMachine::transition_to_message_and_thread(input).await,
             (
@@ -80,6 +85,7 @@ impl ObsidianSlackStateMachine {
                     get_users: false,
                     get_channel_info: false,
                     get_team_info: _,
+                    get_file_data: false,
                 },
             ) => Ok(ObsidianSlackStates::End),
             (
@@ -88,6 +94,7 @@ impl ObsidianSlackStateMachine {
                     get_users: _,
                     get_channel_info: true,
                     get_team_info: _,
+                    get_file_data: _,
                 },
             ) => ObsidianSlackStateMachine::transition_to_channel_info(input).await,
             (
@@ -96,14 +103,25 @@ impl ObsidianSlackStateMachine {
                     get_users: true,
                     get_channel_info: false,
                     get_team_info: _,
+                    get_file_data: _,
                 },
             ) => ObsidianSlackStateMachine::transition_to_user_info(input).await,
+            (
+                ObsidianSlackStates::MessageAndThread,
+                SlackHttpClientConfigFeatureFlags {
+                    get_users: false,
+                    get_channel_info: false,
+                    get_team_info: false,
+                    get_file_data: true,
+                },
+            ) => ObsidianSlackStateMachine::transition_to_files(input).await,
             (
                 ObsidianSlackStates::ChannelInfo,
                 SlackHttpClientConfigFeatureFlags {
                     get_users: false,
                     get_channel_info: _,
                     get_team_info: _,
+                    get_file_data: false,
                 },
             ) => Ok(ObsidianSlackStates::End),
             (
@@ -112,14 +130,25 @@ impl ObsidianSlackStateMachine {
                     get_users: true,
                     get_channel_info: _,
                     get_team_info: _,
+                    get_file_data: _,
                 },
             ) => ObsidianSlackStateMachine::transition_to_user_info(input).await,
+            (
+                ObsidianSlackStates::ChannelInfo,
+                SlackHttpClientConfigFeatureFlags {
+                    get_users: false,
+                    get_channel_info: _,
+                    get_team_info: _,
+                    get_file_data: true,
+                },
+            ) => ObsidianSlackStateMachine::transition_to_files(input).await,
             (
                 ObsidianSlackStates::UserInfo,
                 SlackHttpClientConfigFeatureFlags {
                     get_users: _,
                     get_channel_info: _,
                     get_team_info: false,
+                    get_file_data: false,
                 },
             ) => Ok(ObsidianSlackStates::End),
             (
@@ -128,14 +157,43 @@ impl ObsidianSlackStateMachine {
                     get_users: _,
                     get_channel_info: _,
                     get_team_info: true,
+                    get_file_data: _,
                 },
             ) => ObsidianSlackStateMachine::transition_to_team_info(input).await,
+            (
+                ObsidianSlackStates::UserInfo,
+                SlackHttpClientConfigFeatureFlags {
+                    get_users: _,
+                    get_channel_info: _,
+                    get_team_info: false,
+                    get_file_data: true,
+                },
+            ) => ObsidianSlackStateMachine::transition_to_files(input).await,
             (
                 ObsidianSlackStates::TeamInfo,
                 SlackHttpClientConfigFeatureFlags {
                     get_users: _,
                     get_channel_info: _,
                     get_team_info: _,
+                    get_file_data: false,
+                },
+            ) => Ok(ObsidianSlackStates::End),
+            (
+                ObsidianSlackStates::TeamInfo,
+                SlackHttpClientConfigFeatureFlags {
+                    get_users: _,
+                    get_channel_info: _,
+                    get_team_info: _,
+                    get_file_data: true,
+                },
+            ) => ObsidianSlackStateMachine::transition_to_files(input).await,
+            (
+                ObsidianSlackStates::Files,
+                SlackHttpClientConfigFeatureFlags {
+                    get_users: _,
+                    get_channel_info: _,
+                    get_team_info: _,
+                    get_file_data: _,
                 },
             ) => Ok(ObsidianSlackStates::End),
             (_, _) => InvalidStateTransitionSnafu {
@@ -192,5 +250,33 @@ impl ObsidianSlackStateMachine {
             .context(CouldNotGetTeamsFromApiSnafu)?;
         input.components.teams(Some(teams));
         Ok(ObsidianSlackStates::TeamInfo)
+    }
+
+    async fn transition_to_files(
+        input: &mut ObsidianSlackStateMachineInput<Promise>,
+    ) -> Result<ObsidianSlackStates> {
+        let mut file_data: Vec<(String, String)> = vec![];
+        for (file_id, file_url) in input
+            .components
+            .message_and_thread
+            .as_ref()
+            .expect("Expected message and thread to look for file info, found None. This is a bug")
+            .collect_file_links()
+            .0
+            .into_iter()
+        {
+            file_data.push((
+                file_id,
+                messages::get_file_data_from_slack(&input.client, file_url)
+                    .await
+                    .context(CouldNotGetFileDataFromSlackSnafu)?,
+            ))
+        }
+
+        input
+            .components
+            .file_data(Some(file_data.into_iter().collect()));
+
+        Ok(ObsidianSlackStates::Files)
     }
 }

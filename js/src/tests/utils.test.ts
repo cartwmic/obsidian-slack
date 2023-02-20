@@ -19,7 +19,7 @@ describe("process result logic", () => {
   });
 
   test("sends notice on success result and successful save of result and copies to clipboard", async () => {
-    let mock_result = { message_and_thread: { file_name: "mock_filename" } };
+    let mock_result = { message_and_thread: {}, file_name: "mock_filename" };
     let mock_vault = new Vault();
 
     window.alert = jest.fn((msg: string) => {
@@ -48,7 +48,49 @@ describe("process result logic", () => {
     expect(mock_vault.create).toBeCalledTimes(1);
     expect(mock_vault.create).toBeCalledWith(
       "abc/mock_filename",
-      JSON.stringify(mock_result.message_and_thread, undefined, 2),
+      JSON.stringify(mock_result, undefined, 2),
+    );
+    // one extra due to mocking of constructor
+    expect(mockNotice).toBeCalledTimes(2);
+  });
+  test("sends notice on success result and successful save of result, save of attachments, and copies to clipboard", async () => {
+    let mock_result = { message_and_thread: {}, file_name: "mock_filename", file_data: { "file1": "data" } };
+    let mock_result_filtered = { message_and_thread: {}, file_name: "mock_filename" };
+    let mock_vault = new Vault();
+
+    window.alert = jest.fn((msg: string) => {
+      console.log("alert: " + msg);
+    });
+    mockNotice.mockImplementationOnce((msg: string) => {
+      console.log("notice: " + msg);
+      return new Notice(msg);
+    });
+
+    jest.spyOn(mock_vault, "getConfig")
+      .mockImplementation(() => {
+        return "abc";
+      });
+    jest.spyOn(mock_vault, "create")
+      .mockImplementation(() => {
+        return Promise.resolve(new TFile());
+      });
+
+    await utils.process_result(mock_result, mock_vault);
+
+    expect(window.alert).toBeCalledTimes(0);
+    expect(navigator.clipboard.writeText).toBeCalledTimes(1);
+    expect(mock_vault.getConfig).toBeCalledTimes(1);
+    expect(mock_vault.getConfig).toBeCalledWith("attachmentFolderPath");
+    expect(mock_vault.create).toBeCalledTimes(2);
+    expect(mock_vault.create).toHaveBeenNthCalledWith(
+      1,
+      "abc/mock_filename",
+      JSON.stringify(mock_result_filtered, undefined, 2),
+    );
+    expect(mock_vault.create).toHaveBeenNthCalledWith(
+      2,
+      "abc/file1",
+      "data",
     );
     // one extra due to mocking of constructor
     expect(mockNotice).toBeCalledTimes(2);
@@ -73,7 +115,51 @@ describe("process result logic", () => {
     expect(mockNotice).toBeCalledTimes(0);
   });
   test("sends alert on file not saving due to exception, doesn't copy to clipboard", async () => {
-    let mock_result = { message_and_thread: { file_name: "mock_filename" } };
+    let mock_result = { message_and_thread: {}, file_name: "mock_filename", file_data: { "file1": "data1" } };
+    let mock_result_filtered = { message_and_thread: {}, file_name: "mock_filename" };
+    let mock_vault = new Vault();
+
+    window.alert = jest.fn((msg: string) => {
+      console.log("alert: " + msg);
+    });
+    mockNotice.mockImplementationOnce((msg: string) => {
+      console.log("notice: " + msg);
+      return new Notice(msg);
+    });
+
+    jest.spyOn(mock_vault, "getConfig")
+      .mockImplementation(() => {
+        return "abc";
+      });
+    jest.spyOn(mock_vault, "create")
+      .mockImplementation((path: string) => {
+        if (path.includes("mock_filename")) {
+          return Promise.resolve(new TFile());
+        } else {
+          throw new Error();
+        }
+      });
+
+    await utils.process_result(mock_result, mock_vault);
+
+    expect(window.alert).toBeCalledTimes(1);
+    expect(navigator.clipboard.writeText).toBeCalledTimes(0);
+    expect(mock_vault.getConfig).toBeCalledTimes(1);
+    expect(mock_vault.getConfig).toBeCalledWith("attachmentFolderPath");
+    expect(mock_vault.create).toBeCalledTimes(2);
+    expect(mock_vault.create).toHaveBeenNthCalledWith(
+      1,
+      "abc/mock_filename",
+      JSON.stringify(mock_result_filtered, undefined, 2),
+    );
+    expect(mock_vault.create).toHaveBeenNthCalledWith(
+      2,
+      "abc/file1",
+      "data1",
+    );
+  });
+  test("sends alert on attachments not saving due to exception, doesn't copy to clipboard", async () => {
+    let mock_result = { message_and_thread: {}, file_name: "mock_filename" };
     let mock_vault = new Vault();
 
     window.alert = jest.fn((msg: string) => {
@@ -102,7 +188,7 @@ describe("process result logic", () => {
     expect(mock_vault.create).toBeCalledTimes(1);
     expect(mock_vault.create).toBeCalledWith(
       "abc/mock_filename",
-      JSON.stringify(mock_result.message_and_thread, undefined, 2),
+      JSON.stringify(mock_result, undefined, 2),
     );
     expect(mockNotice).toBeCalledTimes(0);
   });

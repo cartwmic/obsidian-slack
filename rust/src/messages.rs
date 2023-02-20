@@ -3,7 +3,10 @@ use do_notation::m;
 use serde::{Deserialize, Serialize};
 use shrinkwraprs::Shrinkwrap;
 use snafu::{ResultExt, Snafu};
-use std::{collections::HashSet, iter::FromIterator};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::FromIterator,
+};
 
 use crate::{
     response::{self, convert_result_string_to_object, SlackResponseValidator},
@@ -44,9 +47,39 @@ pub enum Error {
 
     #[snafu(display("{source}"))]
     SerdeWasmBindgenCouldNotParseMessageResponse { source: response::Error },
+
+    #[snafu(display("{file_url}"))]
+    FileDataWasNotString { file_url: String },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
+
+pub async fn get_file_data_from_slack<T>(
+    client: &SlackHttpClient<T>,
+    file_url: String,
+) -> Result<String>
+where
+    wasm_bindgen_futures::JsFuture: std::convert::From<T>,
+{
+    let awaited_val = wasm_bindgen_futures::JsFuture::from(client.get_file_data(&file_url))
+        .await
+        // mapping error instead of using snafu context because jsvalue is not an Error from parse method
+        .map_err(|err| Error::WasmErrorFromJsFuture {
+            error: format!("{:#?}", err),
+        })?;
+
+    let result = if awaited_val.is_string() {
+        Ok(awaited_val
+            .as_string()
+            .expect("Expected string, found None. This is a bug"))
+    } else {
+        FileDataWasNotStringSnafu { file_url }.fail()
+    };
+
+    log::info!("attachment value: {:#?}", awaited_val);
+
+    result
+}
 
 pub async fn get_messages_from_api<T>(
     client: &SlackHttpClient<T>,
@@ -134,6 +167,26 @@ impl MessageAndThread {
             Messages::finalize_messages(message_and_thread.message, users)?;
         message_and_thread.thread = Messages::finalize_messages(message_and_thread.thread, users)?;
         Ok(message_and_thread)
+    }
+
+    pub fn collect_file_links(&self) -> FileLinks {
+        self.thread
+            .iter()
+            .map(|message| {
+                message.files.as_ref().map(|files| {
+                    files
+                        .iter()
+                        .map(|file| {
+                            let user_team = file.user_team.clone();
+                            let file_id = file.id.clone();
+                            (format!("{user_team}-{file_id}"), file.url_private.clone())
+                        })
+                        .collect::<Vec<(String, String)>>()
+                })
+            })
+            .flatten()
+            .flatten()
+            .collect()
     }
 }
 
@@ -230,6 +283,7 @@ pub struct Message {
     pub reply_count: Option<u16>,
     pub ts: Option<String>,
     pub reactions: Option<Reactions>,
+    pub files: Option<Files>,
 }
 
 impl Message {
@@ -309,4 +363,50 @@ impl Reaction {
         });
         Ok(reaction)
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display, Shrinkwrap)]
+#[display(Debug)]
+pub struct Files(pub Vec<File>);
+
+impl FromIterator<File> for Files {
+    fn from_iter<T: IntoIterator<Item = File>>(iter: T) -> Self {
+        Files(iter.into_iter().collect())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display, Shrinkwrap)]
+#[display(Debug)]
+pub struct FileLinks(pub HashMap<String, String>);
+
+impl FromIterator<(String, String)> for FileLinks {
+    fn from_iter<T: IntoIterator<Item = (String, String)>>(iter: T) -> Self {
+        FileLinks(iter.into_iter().collect())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display, Shrinkwrap)]
+#[display(Debug)]
+pub struct FilesData(pub HashMap<String, String>);
+
+impl FromIterator<(String, String)> for FilesData {
+    fn from_iter<T: IntoIterator<Item = (String, String)>>(iter: T) -> Self {
+        FilesData(iter.into_iter().collect())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
+#[display(Debug)]
+pub struct File {
+    pub id: String, // use this as filename?
+    pub name: String,
+    pub user_team: String,
+    pub title: String,
+    pub mimetype: String,
+    pub filetype: String,
+    pub size: i64,
+    pub url_private: String, // use this to download
+    pub url_private_download: String,
+    pub permalink: String,
+    pub permalink_public: String,
 }

@@ -153,18 +153,6 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Get Reactions")
-      .setDesc("Toggle if Obsidian Slack should download user reactions along with messages")
-      .addToggle(toggle =>
-        toggle
-          .setValue(this.plugin.settings.get_reactions)
-          .onChange(async (value) => {
-            this.plugin.settings.get_reactions = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
       .setName("Get Channel Info")
       .setDesc("Toggle if Obsidian Slack should download channel info along with messages")
       .addToggle(toggle =>
@@ -181,9 +169,9 @@ class ObsidianSlackPluginSettingsTab extends PluginSettingTab {
       .setDesc("Toggle if Obsidian Slack should download attachments along with messages")
       .addToggle(toggle =>
         toggle
-          .setValue(this.plugin.settings.get_attachments)
+          .setValue(this.plugin.settings.get_file_data)
           .onChange(async (value) => {
-            this.plugin.settings.get_attachments = value;
+            this.plugin.settings.get_file_data = value;
             await this.plugin.saveSettings();
           })
       );
