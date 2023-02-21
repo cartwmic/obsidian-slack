@@ -63,8 +63,14 @@ export class Vault {
   create(path: string, data: string, options?: DataWriteOptions | undefined): Promise<TFile> {
     return Promise.resolve(new TFile());
   }
+
+  createBinary(path: string, data: ArrayBuffer, options?: DataWriteOptions | undefined): Promise<TFile> {
+    return Promise.resolve(new TFile());
+  }
 }
 
 export const Notice = jest.fn((msg: string) => {
-  console.log("in the file");
+});
+
+export const requestUrl = jest.fn((input: any) => {
 });

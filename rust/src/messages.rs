@@ -54,33 +54,6 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-pub async fn get_file_data_from_slack<T>(
-    client: &SlackHttpClient<T>,
-    file_url: String,
-) -> Result<String>
-where
-    wasm_bindgen_futures::JsFuture: std::convert::From<T>,
-{
-    let awaited_val = wasm_bindgen_futures::JsFuture::from(client.get_file_data(&file_url))
-        .await
-        // mapping error instead of using snafu context because jsvalue is not an Error from parse method
-        .map_err(|err| Error::WasmErrorFromJsFuture {
-            error: format!("{:#?}", err),
-        })?;
-
-    let result = if awaited_val.is_string() {
-        Ok(awaited_val
-            .as_string()
-            .expect("Expected string, found None. This is a bug"))
-    } else {
-        FileDataWasNotStringSnafu { file_url }.fail()
-    };
-
-    log::info!("attachment value: {:#?}", awaited_val);
-
-    result
-}
-
 pub async fn get_messages_from_api<T>(
     client: &SlackHttpClient<T>,
     slack_url: &SlackUrl,
@@ -173,16 +146,10 @@ impl MessageAndThread {
         self.thread
             .iter()
             .filter_map(|message| {
-                message.files.as_ref().map(|files| {
-                    files
-                        .iter()
-                        .map(|file| {
-                            let user_team = file.user_team.clone();
-                            let file_id = file.id.clone();
-                            (format!("{user_team}-{file_id}"), file.url_private.clone())
-                        })
-                        .collect::<Vec<(String, String)>>()
-                })
+                message
+                    .files
+                    .as_ref()
+                    .map(|files| files.collect_file_links().0)
             })
             .flatten()
             .collect()
@@ -374,6 +341,22 @@ impl FromIterator<File> for Files {
     }
 }
 
+impl Files {
+    pub fn collect_file_links(&self) -> FileLinks {
+        self.iter()
+            .map(|file| {
+                let user_team = file.user_team.clone();
+                let file_id = file.id.clone();
+                let title = file.title.clone();
+                (
+                    format!("{user_team}-{file_id}-{title}"),
+                    file.url_private.clone(),
+                )
+            })
+            .collect()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display, Shrinkwrap)]
 #[display(Debug)]
 pub struct FileLinks(pub HashMap<String, String>);
@@ -384,23 +367,13 @@ impl FromIterator<(String, String)> for FileLinks {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display, Shrinkwrap)]
-#[display(Debug)]
-pub struct FilesData(pub HashMap<String, String>);
-
-impl FromIterator<(String, String)> for FilesData {
-    fn from_iter<T: IntoIterator<Item = (String, String)>>(iter: T) -> Self {
-        FilesData(iter.into_iter().collect())
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Display)]
 #[display(Debug)]
 pub struct File {
-    pub id: String, // use this as filename?
+    pub id: String,
     pub name: String,
-    pub user_team: String,
     pub title: String,
+    pub user_team: String,
     pub mimetype: String,
     pub filetype: String,
     pub size: i64,

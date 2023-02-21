@@ -191,17 +191,6 @@ impl<ClientReturnType> SlackHttpClient<ClientReturnType> {
         }
     }
 
-    pub fn get_file_data(&self, file_url: &str) -> ClientReturnType {
-        let log_prefix = "rust|get_file_data";
-        log::info!("{log_prefix}|file_url={file_url}");
-
-        log::info!("{}|build request object", &log_prefix);
-        let the_request = self.build_base_get_request().with_url(file_url.to_string());
-
-        log::info!("{}|submit request|request={:#?}", &log_prefix, the_request);
-        (self.request_func)(the_request)
-    }
-
     pub fn get_conversations_replies(&self, channel_id: &str, timestamp: &str) -> ClientReturnType {
         let log_prefix = "rust|get_conversations_replies";
         log::info!(

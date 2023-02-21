@@ -2,7 +2,15 @@
  * @jest-environment jsdom
  */
 
-import { Notice, RequestUrlParam, TFile, Vault } from "obsidian";
+import {
+  Notice,
+  request,
+  RequestUrlParam,
+  RequestUrlResponse,
+  RequestUrlResponsePromise,
+  TFile,
+  Vault,
+} from "obsidian";
 import * as utils from "../utils";
 
 const mockNotice = Notice as jest.Mock<Notice>;
@@ -39,10 +47,11 @@ describe("process result logic", () => {
         return Promise.resolve(new TFile());
       });
 
-    await utils.process_result(mock_result, mock_vault);
+    await utils.process_result("cookie", mock_result, mock_vault);
 
     expect(window.alert).toBeCalledTimes(0);
     expect(navigator.clipboard.writeText).toBeCalledTimes(1);
+    expect(navigator.clipboard.writeText).toBeCalledWith(mock_result.file_name);
     expect(mock_vault.getConfig).toBeCalledTimes(1);
     expect(mock_vault.getConfig).toBeCalledWith("attachmentFolderPath");
     expect(mock_vault.create).toBeCalledTimes(1);
@@ -54,8 +63,7 @@ describe("process result logic", () => {
     expect(mockNotice).toBeCalledTimes(2);
   });
   test("sends notice on success result and successful save of result, save of attachments, and copies to clipboard", async () => {
-    let mock_result = { message_and_thread: {}, file_name: "mock_filename", file_data: { "file1": "data" } };
-    let mock_result_filtered = { message_and_thread: {}, file_name: "mock_filename" };
+    let mock_result = { message_and_thread: {}, file_name: "mock_filename", file_links: new Map([["file1", "link"]]) };
     let mock_vault = new Vault();
 
     window.alert = jest.fn((msg: string) => {
@@ -74,23 +82,35 @@ describe("process result logic", () => {
       .mockImplementation(() => {
         return Promise.resolve(new TFile());
       });
+    jest.spyOn(mock_vault, "createBinary")
+      .mockImplementation((path: string) => {
+        return Promise.resolve(new TFile());
+      });
+    jest.spyOn(utils, "requestUrl")
+      .mockImplementation((input) => {
+        return Promise.resolve({
+          arrayBuffer: new ArrayBuffer(10),
+        }) as unknown as RequestUrlResponsePromise;
+      });
 
-    await utils.process_result(mock_result, mock_vault);
+    await utils.process_result("cookie", mock_result, mock_vault);
 
     expect(window.alert).toBeCalledTimes(0);
     expect(navigator.clipboard.writeText).toBeCalledTimes(1);
     expect(mock_vault.getConfig).toBeCalledTimes(1);
     expect(mock_vault.getConfig).toBeCalledWith("attachmentFolderPath");
-    expect(mock_vault.create).toBeCalledTimes(2);
-    expect(mock_vault.create).toHaveBeenNthCalledWith(
-      1,
+    expect(utils.requestUrl).toHaveBeenCalledWith({
+      "headers": { "cookie": "d=cookie" },
+      "method": "GET",
+      "url": "link",
+    });
+    expect(mock_vault.create).toHaveBeenCalledWith(
       "abc/mock_filename",
-      JSON.stringify(mock_result_filtered, undefined, 2),
+      JSON.stringify(mock_result, utils.replacer, 2),
     );
-    expect(mock_vault.create).toHaveBeenNthCalledWith(
-      2,
+    expect(mock_vault.createBinary).toHaveBeenCalledWith(
       "abc/file1",
-      "data",
+      new ArrayBuffer(10),
     );
     // one extra due to mocking of constructor
     expect(mockNotice).toBeCalledTimes(2);
@@ -106,7 +126,7 @@ describe("process result logic", () => {
     jest.spyOn(mock_vault, "getConfig");
     jest.spyOn(mock_vault, "create");
 
-    await utils.process_result(mock_result, mock_vault);
+    await utils.process_result("cookie", mock_result, mock_vault);
 
     expect(window.alert).toBeCalledTimes(1);
     expect(navigator.clipboard.writeText).toBeCalledTimes(0);
@@ -114,9 +134,8 @@ describe("process result logic", () => {
     expect(mock_vault.create).toBeCalledTimes(0);
     expect(mockNotice).toBeCalledTimes(0);
   });
-  test("sends alert on file not saving due to exception, doesn't copy to clipboard", async () => {
-    let mock_result = { message_and_thread: {}, file_name: "mock_filename", file_data: { "file1": "data1" } };
-    let mock_result_filtered = { message_and_thread: {}, file_name: "mock_filename" };
+  test("sends alert on attachments not saving due to exception, doesn't copy to clipboard", async () => {
+    let mock_result = { message_and_thread: {}, file_name: "mock_filename", file_links: new Map([["file1", "link1"]]) };
     let mock_vault = new Vault();
 
     window.alert = jest.fn((msg: string) => {
@@ -133,32 +152,41 @@ describe("process result logic", () => {
       });
     jest.spyOn(mock_vault, "create")
       .mockImplementation((path: string) => {
-        if (path.includes("mock_filename")) {
-          return Promise.resolve(new TFile());
-        } else {
-          throw new Error();
-        }
+        return Promise.resolve(new TFile());
+      });
+    jest.spyOn(mock_vault, "createBinary")
+      .mockImplementation((path: string) => {
+        throw new Error("whoops");
       });
 
-    await utils.process_result(mock_result, mock_vault);
+    jest.spyOn(utils, "requestUrl")
+      .mockImplementation((input) => {
+        return Promise.resolve({
+          arrayBuffer: new ArrayBuffer(10),
+        }) as unknown as RequestUrlResponsePromise;
+      });
+
+    await utils.process_result("cookie", mock_result, mock_vault);
 
     expect(window.alert).toBeCalledTimes(1);
     expect(navigator.clipboard.writeText).toBeCalledTimes(0);
     expect(mock_vault.getConfig).toBeCalledTimes(1);
     expect(mock_vault.getConfig).toBeCalledWith("attachmentFolderPath");
-    expect(mock_vault.create).toBeCalledTimes(2);
-    expect(mock_vault.create).toHaveBeenNthCalledWith(
-      1,
+    expect(utils.requestUrl).toHaveBeenCalledWith({
+      "headers": { "cookie": "d=cookie" },
+      "method": "GET",
+      "url": "link1",
+    });
+    expect(mock_vault.create).toHaveBeenCalledWith(
       "abc/mock_filename",
-      JSON.stringify(mock_result_filtered, undefined, 2),
+      JSON.stringify(mock_result, utils.replacer, 2),
     );
-    expect(mock_vault.create).toHaveBeenNthCalledWith(
-      2,
+    expect(mock_vault.createBinary).toHaveBeenCalledWith(
       "abc/file1",
-      "data1",
+      new ArrayBuffer(10),
     );
   });
-  test("sends alert on attachments not saving due to exception, doesn't copy to clipboard", async () => {
+  test("sends alert on file not saving due to exception, doesn't copy to clipboard", async () => {
     let mock_result = { message_and_thread: {}, file_name: "mock_filename" };
     let mock_vault = new Vault();
 
@@ -179,7 +207,7 @@ describe("process result logic", () => {
         throw new Error();
       });
 
-    await utils.process_result(mock_result, mock_vault);
+    await utils.process_result("cookie", mock_result, mock_vault);
 
     expect(window.alert).toBeCalledTimes(1);
     expect(navigator.clipboard.writeText).toBeCalledTimes(0);
@@ -217,12 +245,12 @@ describe("process result logic", () => {
         return Promise.resolve(false);
       });
 
-    await utils.process_result(mock_result, mock_vault);
+    await utils.process_result("cookie", mock_result, mock_vault);
 
     expect(window.alert).toBeCalledTimes(1);
     expect(navigator.clipboard.writeText).toBeCalledTimes(0);
     expect(utils.save_result).toBeCalledTimes(1);
-    expect(utils.save_result).toBeCalledWith(mock_result, mock_vault);
+    expect(utils.save_result).toBeCalledWith("cookie", mock_result, mock_vault);
     expect(mockNotice).toBeCalledTimes(0);
   });
 });
@@ -266,7 +294,7 @@ describe("get slack message logic", () => {
 
     expect(window.alert).toBeCalledTimes(0);
     expect(utils.process_result).toBeCalledTimes(1);
-    expect(utils.process_result).toBeCalledWith("resolve", mock_vault);
+    expect(utils.process_result).toBeCalledWith(cookie, "resolve", mock_vault);
   });
   test("empty api token shows alert and doesn't attempt to process result", async () => {
     let api_token = "";

@@ -1,7 +1,9 @@
-import { Notice, request, RequestUrlParam, Vault } from "obsidian";
+import { Notice, request, requestUrl, RequestUrlParam, Vault } from "obsidian";
 import * as path from "path";
 // cyclic dependency to work correctly with jest unit testing. See https://stackoverflow.com/a/47976589
 import * as mod from "./utils";
+
+export { requestUrl } from "obsidian";
 
 export interface ObsidianSlackPluginSettings {
   apiToken: string;
@@ -21,17 +23,17 @@ export const DEFAULT_SETTINGS: ObsidianSlackPluginSettings = {
   get_team_info: false,
 };
 
-export async function process_result(result: any, vault: Vault) {
+export async function process_result(cookie: string, result: any, vault: Vault) {
   try {
     if (typeof (result) === "string") {
       alert(result);
       return;
     }
 
-    let file_saved = await mod.save_result(result, vault);
+    let file_saved = await mod.save_result(cookie, result, vault);
 
     if (file_saved) {
-      await navigator.clipboard.writeText(result.message_and_thread.file_name);
+      await navigator.clipboard.writeText(result.file_name);
       let message =
         "Successfully downloaded slack message and saved to attachment folder. File name saved to clipboard";
       new Notice(message);
@@ -45,24 +47,28 @@ export async function process_result(result: any, vault: Vault) {
   }
 }
 
-export async function save_result(result: any, vault: Vault): Promise<boolean> {
+export async function save_result(cookie: string, result: any, vault: Vault): Promise<boolean> {
+  console.log(result);
+
   let attachment_path = vault.getConfig("attachmentFolderPath");
   let file_path = path.join(attachment_path, result.file_name);
-  let keys_to_save = ["message_and_thread", "users", "channel", "teams", "file_name"];
-  let result_filtered = Object.keys(result).filter((key) => keys_to_save.includes(key)).reduce((obj, key) => {
-    return Object.assign(obj, {
-      [key]: result[key],
-    });
-  }, {});
-  let tfile = await vault.create(file_path, JSON.stringify(result_filtered, undefined, 2));
-  console.log(tfile);
-  if (result.file_data) {
-    console.log(result.file_data);
-    for (let key in result.file_data) {
-      await vault.create(path.join(attachment_path, key), result.file_data[key]);
+  let tfiles = [await vault.create(file_path, JSON.stringify(result, replacer, 2))];
+  if (result.file_links) {
+    for (const [key, val] of result.file_links) {
+      let request_url_params: RequestUrlParam = {
+        url: val,
+        method: "GET",
+        headers: {
+          cookie: "d=" + cookie,
+        },
+      };
+      let data = await requestUrl(request_url_params);
+      console.log(data);
+      tfiles = tfiles.concat([await vault.createBinary(path.join(attachment_path, key), data.arrayBuffer)]);
     }
   }
-  return tfile ? true : false;
+  console.log(tfiles);
+  return tfiles ? true : false;
 }
 
 export async function get_slack_message_modal_on_close_helper(
@@ -89,9 +95,20 @@ export async function get_slack_message_modal_on_close_helper(
         "get_team_info": settings.get_team_info,
       }, request);
 
-      await mod.process_result(result, vault);
+      await mod.process_result(cookie, result, vault);
     }
   } else {
     alert("apiToken or cookie or url was null, undefined, or empty. Aborting operation");
+  }
+}
+
+export function replacer(key: any, value: any[]) {
+  if (value instanceof Map) {
+    return {
+      dataType: "Map",
+      value: Array.from(value.entries()), // or with spread: value: [...value]
+    };
+  } else {
+    return value;
   }
 }

@@ -6,7 +6,7 @@ use snafu::{ResultExt, Snafu};
 
 use crate::{
     channels::{self, Channel},
-    messages::{self, FilesData, MessageAndThread},
+    messages::{self, FileLinks, MessageAndThread},
     team::{CollectTeams, TeamIds, Teams},
     users::{self, CollectUsers, UserIds, Users},
 };
@@ -57,7 +57,7 @@ pub struct ObsidianSlackComponents {
     pub teams: Option<Teams>,
 
     #[builder(default)]
-    pub file_data: Option<FilesData>,
+    pub file_links: Option<FileLinks>,
 }
 
 impl ObsidianSlackComponents {

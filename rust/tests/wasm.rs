@@ -7,7 +7,7 @@ use obsidian_slack::{
     components::{FileName, ObsidianSlackComponents},
     get_slack_message,
     messages::{
-        File, Files, FilesData, Message, MessageAndThread, MessageResponse, Messages, Reaction,
+        File, FileLinks, Files, Message, MessageAndThread, MessageResponse, Messages, Reaction,
         Reactions,
     },
     slack_http_client::SlackHttpClientConfigFeatureFlags,
@@ -29,7 +29,6 @@ fn get_mock_request_function(
     user_response: Option<UserResponse>,
     channel_response: Option<ChannelResponse>,
     team_response: Option<TeamResponse>,
-    file_data: Option<String>,
 ) -> JsValue {
     let func_body = format!(
         r#"
@@ -45,9 +44,6 @@ fn get_mock_request_function(
             }}
             else if (params.url.includes("team.info")) {{
                 return Promise.resolve(JSON.stringify({}))
-            }}
-            else if (params.url.includes("files.slack.com")) {{
-                return Promise.resolve("{}")
             }}
             else {{
                 return JSON.stringify({{
@@ -95,7 +91,6 @@ fn get_mock_request_function(
             )
             .unwrap()
         ),
-        file_data.unwrap_or("file data not implemented".to_string())
     );
 
     let func = js_sys::Function::new_with_args("params", &func_body);
@@ -225,15 +220,8 @@ fn files() -> Files {
     }])
 }
 
-fn files_data() -> FilesData {
-    files()
-        .iter()
-        .map(|file| {
-            let file_id = file.id.clone();
-            let file_team = file.user_team.clone();
-            (format!("{file_team}-{file_id}"), file.name.clone())
-        })
-        .collect()
+fn file_links() -> FileLinks {
+    files().collect_file_links()
 }
 
 fn team_response(ok: Option<bool>, error: Option<String>, team: Option<Team>) -> TeamResponse {
@@ -307,7 +295,7 @@ fn obsidian_slack_components(
     users: Option<Users>,
     channel: Option<Channel>,
     teams: Option<Teams>,
-    file_data: Option<FilesData>,
+    file_links: Option<FileLinks>,
 ) -> ObsidianSlackComponents {
     ObsidianSlackComponents {
         message_and_thread,
@@ -315,7 +303,7 @@ fn obsidian_slack_components(
         users,
         channel,
         teams,
-        file_data,
+        file_links,
     }
 }
 
@@ -346,7 +334,6 @@ async fn get_slack_message_returns_data_correctly_common(
     user_response: Option<UserResponse>,
     channel_response: Option<ChannelResponse>,
     team_response: Option<TeamResponse>,
-    file_data: Option<String>,
     url: String,
     feature_flags: SlackHttpClientConfigFeatureFlags,
     expected_return_data: ObsidianSlackComponents,
@@ -358,7 +345,6 @@ async fn get_slack_message_returns_data_correctly_common(
         user_response,
         channel_response,
         team_response,
-        file_data,
     );
 
     let api_token = "xoxc...";
@@ -397,7 +383,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -435,7 +420,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -465,7 +449,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -509,7 +492,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -539,7 +521,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -583,7 +564,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -613,7 +593,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string() + "1"),
@@ -660,7 +639,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -684,7 +662,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -722,7 +699,6 @@ async fn get_slack_message_returns_data_correctly_no_feature_flags_no_reactions_
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -749,7 +725,6 @@ async fn get_slack_message_returns_data_correctly_with_at_least_channel_info_fla
         Some(channel(None, None)),
     ));
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -787,7 +762,6 @@ async fn get_slack_message_returns_data_correctly_with_at_least_channel_info_fla
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -811,7 +785,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
     let user_response = Some(user_response(Some(true), None, Some(user(None))));
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -853,7 +826,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -881,7 +853,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
         Some(channel(None, None)),
     ));
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -923,7 +894,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -951,7 +921,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
         Some(channel(None, Some(DEFAULT_USER_ID.to_string()))),
     ));
     let team_response = None;
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -993,7 +962,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -1016,7 +984,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_te
     let user_response = Some(user_response(Some(true), None, Some(user(None))));
     let channel_response = None;
     let team_response = Some(team_response(Some(true), None, Some(team())));
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -1062,7 +1029,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_te
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -1090,7 +1056,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
         Some(channel(None, Some(DEFAULT_USER_ID.to_string()))),
     ));
     let team_response = Some(team_response(Some(true), None, Some(team())));
-    let file_data = None;
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -1139,7 +1104,6 @@ async fn get_slack_message_returns_data_correctly_with_user_info_flag_set_and_ch
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -1162,13 +1126,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_set_only()
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = Some(
-        files_data()
-            .values().cloned()
-            .collect::<Vec<String>>()
-            .index(0)
-            .clone(),
-    );
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -1198,7 +1155,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_set_only()
         None,
         None,
         None,
-        Some(files_data()),
+        Some(file_links()),
     );
 
     get_slack_message_returns_data_correctly_common(
@@ -1206,7 +1163,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_set_only()
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -1229,13 +1185,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_user_f
     let user_response = Some(user_response(Some(true), None, Some(user(None))));
     let channel_response = None;
     let team_response = None;
-    let file_data = Some(
-        files_data()
-            .values().cloned()
-            .collect::<Vec<String>>()
-            .index(0)
-            .clone(),
-    );
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -1269,7 +1218,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_user_f
         )),
         None,
         None,
-        Some(files_data()),
+        Some(file_links()),
     );
 
     get_slack_message_returns_data_correctly_common(
@@ -1277,7 +1226,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_user_f
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -1304,13 +1252,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_channe
         Some(channel(None, None)),
     ));
     let team_response = None;
-    let file_data = Some(
-        files_data()
-            .values().cloned()
-            .collect::<Vec<String>>()
-            .index(0)
-            .clone(),
-    );
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -1340,7 +1281,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_channe
         None,
         Some(channel(None, None)),
         None,
-        Some(files_data()),
+        Some(file_links()),
     );
 
     get_slack_message_returns_data_correctly_common(
@@ -1348,7 +1289,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_flag_and_channe
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -1371,13 +1311,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_and_user_and_te
     let user_response = Some(user_response(Some(true), None, Some(user(None))));
     let channel_response = None;
     let team_response = Some(team_response(Some(true), None, Some(team())));
-    let file_data = Some(
-        files_data()
-            .values().cloned()
-            .collect::<Vec<String>>()
-            .index(0)
-            .clone(),
-    );
     let url = url(
         Some(DEFAULT_CHANNEL_ID.to_string()),
         Some(DEFAULT_TS.to_string()),
@@ -1415,7 +1348,7 @@ async fn get_slack_message_returns_data_correctly_with_file_data_and_user_and_te
                 .into_iter()
                 .collect(),
         )),
-        Some(files_data()),
+        Some(file_links()),
     );
 
     get_slack_message_returns_data_correctly_common(
@@ -1423,7 +1356,6 @@ async fn get_slack_message_returns_data_correctly_with_file_data_and_user_and_te
         user_response,
         channel_response,
         team_response,
-        file_data,
         url,
         feature_flags,
         expected_return_data,
@@ -1450,7 +1382,6 @@ async fn get_slack_message_returns_error_messages_correctly_base(
         user_response,
         channel_response,
         team_response,
-        file_data,
     );
 
     let result = get_slack_message(

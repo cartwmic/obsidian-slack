@@ -255,27 +255,16 @@ impl ObsidianSlackStateMachine {
     async fn transition_to_files(
         input: &mut ObsidianSlackStateMachineInput<Promise>,
     ) -> Result<ObsidianSlackStates> {
-        let mut file_data: Vec<(String, String)> = vec![];
-        for (file_id, file_url) in input
-            .components
-            .message_and_thread
-            .as_ref()
-            .expect("Expected message and thread to look for file info, found None. This is a bug")
-            .collect_file_links()
-            .0
-            .into_iter()
-        {
-            file_data.push((
-                file_id,
-                messages::get_file_data_from_slack(&input.client, file_url)
-                    .await
-                    .context(CouldNotGetFileDataFromSlackSnafu)?,
-            ))
-        }
-
-        input
-            .components
-            .file_data(Some(file_data.into_iter().collect()));
+        input.components.file_links(Some(
+            input
+                .components
+                .message_and_thread
+                .as_ref()
+                .expect(
+                    "Expected message and thread to look for file info, found None. This is a bug",
+                )
+                .collect_file_links(),
+        ));
 
         Ok(ObsidianSlackStates::Files)
     }
