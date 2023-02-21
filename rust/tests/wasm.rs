@@ -1368,7 +1368,6 @@ async fn get_slack_message_returns_error_messages_correctly_base(
     user_response: Option<UserResponse>,
     channel_response: Option<ChannelResponse>,
     team_response: Option<TeamResponse>,
-    file_data: Option<String>,
     api_token: String,
     cookie: String,
     url: String,
@@ -1408,7 +1407,6 @@ async fn get_slack_message_returns_invalid_api_token() {
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let api_token = "bad_token".to_string();
     let cookie = "xoxd...".to_string();
     let url = url(
@@ -1424,7 +1422,6 @@ async fn get_slack_message_returns_invalid_api_token() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
@@ -1440,7 +1437,6 @@ async fn get_slack_message_returns_invalid_api_cookie() {
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let api_token = "xoxc...".to_string();
     let cookie = "...".to_string();
     let url = url(
@@ -1456,7 +1452,6 @@ async fn get_slack_message_returns_invalid_api_cookie() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
@@ -1472,7 +1467,6 @@ async fn get_slack_message_returns_missing_channel_id() {
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let api_token = "xoxc...".to_string();
     let cookie = "xoxd...".to_string();
     let url = url(None, Some(DEFAULT_TS.to_string()), None);
@@ -1484,7 +1478,6 @@ async fn get_slack_message_returns_missing_channel_id() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
@@ -1500,7 +1493,6 @@ async fn get_slack_message_returns_missing_timestamp() {
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let api_token = "xoxc...".to_string();
     let cookie = "xoxd...".to_string();
     let url = url(Some(DEFAULT_CHANNEL_ID.to_string()), None, None);
@@ -1512,7 +1504,6 @@ async fn get_slack_message_returns_missing_timestamp() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
@@ -1528,7 +1519,6 @@ async fn get_slack_message_returns_invalid_message_response() {
     let user_response = None;
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let api_token = "xoxc...".to_string();
     let cookie = "xoxd...".to_string();
     let url = url(
@@ -1544,7 +1534,6 @@ async fn get_slack_message_returns_invalid_message_response() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
@@ -1569,7 +1558,6 @@ async fn get_slack_message_returns_invalid_user_response() {
     let user_response = Some(user_response(Some(false), None, None));
     let channel_response = None;
     let team_response = None;
-    let file_data = None;
     let api_token = "xoxc...".to_string();
     let cookie = "xoxd...".to_string();
     let url = url(
@@ -1585,7 +1573,6 @@ async fn get_slack_message_returns_invalid_user_response() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
@@ -1610,7 +1597,6 @@ async fn get_slack_message_returns_invalid_channel_response() {
     let channel_response = Some(channel_response(Some(false), None, None));
     let user_response = None;
     let team_response = None;
-    let file_data = None;
     let api_token = "xoxc...".to_string();
     let cookie = "xoxd...".to_string();
     let url = url(
@@ -1626,7 +1612,6 @@ async fn get_slack_message_returns_invalid_channel_response() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
@@ -1651,7 +1636,6 @@ async fn get_slack_message_returns_invalid_team_response() {
     let user_response = Some(user_response(Some(true), None, Some(user(None))));
     let channel_response = None;
     let team_response = Some(team_response(Some(false), None, None));
-    let file_data = None;
     let api_token = "xoxc...".to_string();
     let cookie = "xoxd...".to_string();
     let url = url(
@@ -1667,7 +1651,6 @@ async fn get_slack_message_returns_invalid_team_response() {
         user_response,
         channel_response,
         team_response,
-        file_data,
         api_token,
         cookie,
         url,
