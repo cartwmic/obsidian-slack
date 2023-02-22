@@ -1,4 +1,4 @@
-import { Notice, request, requestUrl, RequestUrlParam, Vault } from "obsidian";
+import { Notice, request, requestUrl, RequestUrlParam, TFile, Vault } from "obsidian";
 import * as path from "path";
 // cyclic dependency to work correctly with jest unit testing. See https://stackoverflow.com/a/47976589
 import * as mod from "./utils";
@@ -52,7 +52,21 @@ export async function save_result(cookie: string, result: any, vault: Vault): Pr
 
   let attachment_path = vault.getConfig("attachmentFolderPath");
   let file_path = path.join(attachment_path, result.file_name);
-  let tfiles = [await vault.create(file_path, JSON.stringify(result, replacer, 2))];
+  let tfiles: TFile[] = [];
+  let result_data = JSON.stringify(result, replacer, 2);
+  try {
+    tfiles = [await vault.create(file_path, result_data)];
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      if (e.message.includes("File already exists")) {
+        let tfile = vault.getFiles().filter((file) => file_path.includes(file.path))[0];
+        await vault.trash(tfile, true);
+        tfiles = [await vault.create(file_path, result_data)];
+      } else {
+        throw e;
+      }
+    }
+  }
   if (result.file_links) {
     for (const [key, val] of result.file_links) {
       let request_url_params: RequestUrlParam = {
@@ -64,7 +78,20 @@ export async function save_result(cookie: string, result: any, vault: Vault): Pr
       };
       let data = await requestUrl(request_url_params);
       console.log(data);
-      tfiles = tfiles.concat([await vault.createBinary(path.join(attachment_path, key), data.arrayBuffer)]);
+      let file_path = path.join(attachment_path, key);
+      try {
+        tfiles = tfiles.concat([await vault.createBinary(file_path, data.arrayBuffer)]);
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          if (e.message.includes("File already exists")) {
+            let tfile = vault.getFiles().filter((file) => file_path.includes(file.path))[0];
+            await vault.trash(tfile, true);
+            tfiles = [await vault.createBinary(file_path, data.arrayBuffer)];
+          } else {
+            throw e;
+          }
+        }
+      }
     }
   }
   console.log(tfiles);

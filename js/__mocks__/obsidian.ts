@@ -58,15 +58,15 @@ export class TFolder extends TAbstractFile {
 }
 
 export class Vault {
-  getConfig(key: string) {}
+  getConfig = jest.fn();
 
-  create(path: string, data: string, options?: DataWriteOptions | undefined): Promise<TFile> {
-    return Promise.resolve(new TFile());
-  }
+  getFiles = jest.fn();
 
-  createBinary(path: string, data: ArrayBuffer, options?: DataWriteOptions | undefined): Promise<TFile> {
-    return Promise.resolve(new TFile());
-  }
+  trash = jest.fn();
+
+  create = jest.fn();
+
+  createBinary = jest.fn();
 }
 
 export const Notice = jest.fn((msg: string) => {
